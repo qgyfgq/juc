@@ -1,0 +1,4370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- iOS Safari 专用全屏及 PWA 配置 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="耳机小剧场">
+    <meta name="theme-color" content="#f4f4f7" id="theme-color-meta">
+    
+    <title>耳机の小剧场游玩区</title>
+    <!-- 引入 Mammoth.js 纯浏览器端 Word 文档解析引擎，绝无 HTML 乱码 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <style>
+        /* 简约黑白灰 iOS 拟态玻璃配色系统 */
+        :root {
+            /* 默认日间模式 (Day Mode) */
+            --bg-color: #f4f4f7;
+            --glass-bg: rgba(255, 255, 255, 0.45);
+            --glass-border: rgba(0, 0, 0, 0.06);
+            --glass-highlight: rgba(255, 255, 255, 0.25);
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(0, 0, 0, 0.45);
+            --card-hover: rgba(0, 0, 0, 0.04);
+            --accent-btn: #000000;
+            --accent-btn-text: #ffffff;
+            --input-bg: rgba(0, 0, 0, 0.02);
+            --shadow: rgba(0, 0, 0, 0.05);
+            --orb-color-1: #8e8e93;
+            --orb-color-2: #c7c7cc;
+            --orb-opacity: 0.22;
+        }
+
+        :root.dark-mode {
+            /* 暗黑模式 (Night Mode) */
+            --bg-color: #09090b;
+            --glass-bg: rgba(20, 20, 25, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.06);
+            --glass-highlight: rgba(255, 255, 255, 0.03);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.45);
+            --card-hover: rgba(255, 255, 255, 0.08);
+            --accent-btn: #ffffff;
+            --accent-btn-text: #000000;
+            --input-bg: rgba(255, 255, 255, 0.03);
+            --shadow: rgba(0, 0, 0, 0.5);
+            --orb-color-1: #ffffff;
+            --orb-color-2: #a1a1aa;
+            --orb-opacity: 0.12;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            overflow-x: hidden;
+            position: relative;
+            transition: background-color 0.5s ease;
+        }
+
+        /* ---------------- 全局自适应壁纸承载层 ---------------- */
+        .global-wallpaper-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -2; /* 居于气泡后，玩法内容层下 */
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            pointer-events: none;
+            opacity: 0; /* 无壁纸时完全隐形 */
+            transition: opacity 0.5s ease, filter 0.3s ease;
+        }
+
+        /* ---------------- 背景柔光气泡 ---------------- */
+        .bg-glow-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .bg-glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: var(--orb-opacity);
+            transition: background 0.5s ease, opacity 0.5s ease;
+        }
+
+        .orb-1 {
+            width: 45vw;
+            height: 45vw;
+            top: -10%;
+            right: 5%;
+            background: var(--orb-color-1);
+        }
+
+        .orb-2 {
+            width: 60vw;
+            height: 60vw;
+            bottom: -15%;
+            left: -10%;
+            background: var(--orb-color-2);
+        }
+
+        /* ---------------- 全屏自适应容器（适配刘海屏及底部安全区） ---------------- */
+        .app-container {
+            width: 100%;
+            max-width: 480px; /* 默认手机端最大宽度 */
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            padding: calc(12px + env(safe-area-inset-top)) 24px calc(40px + env(safe-area-inset-bottom)) 24px;
+            transition: max-width 0.3s ease;
+        }
+
+        /* 媒体查询：智能自适应 iPad / 平板大屏横竖屏 */
+        @media (min-width: 768px) {
+            .app-container {
+                max-width: 760px; /* 平板竖屏自适应拓宽 */
+            }
+            .app-header h1 {
+                font-size: 30px;
+            }
+            .list-card-title {
+                font-size: 17px;
+            }
+            .list-card-desc {
+                font-size: 12.5px;
+            }
+            .glass-panel {
+                padding: 28px 24px;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .app-container {
+                max-width: 1000px; /* 电脑端或平板横屏极致大屏适配 */
+            }
+        }
+
+        /* ---------------- 用户手机同步状态栏 ---------------- */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 24px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 25px;
+            letter-spacing: -0.2px;
+            pointer-events: none;
+        }
+
+        .status-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-signal-vector {
+            display: flex;
+            align-items: center;
+            color: var(--text-primary);
+        }
+
+        .status-signal-vector svg {
+            width: 17px;
+            height: 11px;
+        }
+
+        .battery-container {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .battery-shell {
+            width: 22px;
+            height: 11px;
+            border: 1px solid var(--text-primary);
+            border-radius: 3px;
+            padding: 1px;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .battery-shell::after {
+            content: '';
+            position: absolute;
+            right: -2.5px;
+            top: 3.5px;
+            width: 1.5px;
+            height: 3px;
+            background: var(--text-primary);
+            border-radius: 0 1px 1px 0;
+        }
+
+        .battery-fill {
+            height: 100%;
+            background: var(--text-primary);
+            border-radius: 1px;
+            width: 100%;
+        }
+
+        .charging-bolt {
+            display: none;
+            color: var(--text-primary);
+            margin-right: -2px;
+        }
+
+        .charging-bolt svg {
+            width: 11px;
+            height: 11px;
+            fill: currentColor;
+        }
+
+        /* ---------------- 标题栏区 ---------------- */
+        .app-header {
+            margin-bottom: 35px;
+        }
+
+        .title-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .app-header h1 {
+            font-size: 26px;
+            font-weight: 600;
+            letter-spacing: -0.8px;
+        }
+
+        .theme-toggle {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            transition: opacity 0.2s;
+            z-index: 50;
+        }
+
+        .theme-toggle:active {
+            opacity: 0.6;
+        }
+
+        .theme-toggle svg {
+            width: 20px;
+            height: 20px;
+            stroke-width: 1.2;
+        }
+
+        .app-header p {
+            font-size: 11px;
+            color: var(--text-secondary);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* ---------------- 列表堆叠 ---------------- */
+        .list-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .list-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 18px 20px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(25px) saturate(190%);
+            -webkit-backdrop-filter: blur(25px) saturate(190%);
+            box-shadow: 0 8px 32px var(--shadow);
+            transition: background 0.3s, border-color 0.3s, transform 0.2s;
+        }
+
+        .list-card:active {
+            transform: scale(0.98);
+            background: var(--card-hover);
+        }
+
+        .list-card-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+
+        .list-card-icon svg {
+            width: 22px;
+            height: 22px;
+            stroke-width: 1.2;
+        }
+
+        .list-card-content {
+            flex: 1;
+        }
+
+        .list-card-title {
+            font-size: 15px;
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+
+        .list-card-desc {
+            font-size: 11.5px;
+            color: var(--text-secondary);
+            line-height: 1.3;
+        }
+
+        .list-card-arrow {
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+
+        .list-card-arrow svg {
+            width: 16px;
+            height: 16px;
+            stroke-width: 1.2;
+        }
+
+        /* ---------------- 子页面面板 ---------------- */
+        .view-content {
+            flex: 1;
+            position: relative;
+            width: 100%;
+        }
+
+        .view {
+            display: none;
+            width: 100%;
+            flex-direction: column;
+        }
+
+        .view.active {
+            display: flex;
+            animation: fadeInScale 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.98) translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .view-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-primary);
+            margin-right: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            transition: opacity 0.2s;
+            position: relative;
+        }
+
+        .back-btn:active {
+            opacity: 0.5;
+        }
+
+        .back-btn svg {
+            width: 22px;
+            height: 22px;
+            stroke-width: 1.5;
+        }
+
+        .view-header h2 {
+            font-size: 20px;
+            font-weight: 500;
+            letter-spacing: -0.5px;
+        }
+
+        /* ---------------- 交互组件设计 ---------------- */
+        .glass-panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 24px 20px;
+            backdrop-filter: blur(25px) saturate(190%);
+            -webkit-backdrop-filter: blur(25px) saturate(190%);
+            box-shadow: 0 8px 32px var(--shadow);
+            margin-bottom: 16px;
+        }
+
+        .input-group {
+            margin-bottom: 18px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 11.5px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .input-group input, .input-group textarea {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 13px 16px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus, .input-group textarea:focus {
+            border-color: var(--text-primary);
+        }
+
+        /* 纯黑白控制按钮 */
+        .mono-btn {
+            width: 100%;
+            background: var(--accent-btn);
+            color: var(--accent-btn-text);
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 14.5px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .mono-btn:active {
+            transform: scale(0.98);
+            opacity: 0.85;
+        }
+
+        .mono-btn.secondary {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+        }
+
+        :root.light-mode .mono-btn.secondary {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        /* 各类列表 */
+        .model-list-box {
+            margin-top: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--glass-border);
+        }
+
+        :root .model-list-box {
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        :root.dark-mode .model-list-box {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .model-list-box::-webkit-scrollbar {
+            width: 3px;
+        }
+        .model-list-box::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1.5px;
+        }
+
+        .model-item {
+            padding: 12px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .model-item:last-child {
+            border-bottom: none;
+        }
+
+        .model-item.selected {
+            background: rgba(0, 0, 0, 0.05);
+            font-weight: 500;
+        }
+
+        :root.dark-mode .model-item.selected {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .placeholder-text {
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-align: center;
+            padding: 24px;
+        }
+
+        /* ---------------- 多选时极简亮灰色高亮反馈规则 ---------------- */
+        .glass-panel.selected-delete {
+            background: rgba(0, 0, 0, 0.12) !important;
+            border-color: var(--text-primary) !important;
+        }
+        :root.dark-mode .glass-panel.selected-delete {
+            background: rgba(255, 255, 255, 0.18) !important;
+        }
+        
+        .profile-card.selected-delete {
+            background: rgba(0, 0, 0, 0.12) !important;
+            border-color: var(--text-primary) !important;
+        }
+        :root.dark-mode .profile-card.selected-delete {
+            background: rgba(255, 255, 255, 0.18) !important;
+        }
+
+        /* ---------------- 居中置顶高亮 Toast 提示框 ---------------- */
+        .toast {
+            position: fixed;
+            top: 40px; 
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(10, 10, 10, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 12px 24px;
+            border-radius: 14px;
+            font-size: 12.5px;
+            color: #ffffff;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 1500;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            max-width: 90%;
+            width: max-content;
+            text-align: center; 
+            white-space: normal;
+            line-height: 1.5;
+        }
+
+        :root.dark-mode .toast {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            color: #000000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--text-primary);
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ---------------- 高级拟态亮色弹窗 (无任何红色) ---------------- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.3); 
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        :root.dark-mode .modal-overlay {
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 100%;
+            max-width: 360px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.88); 
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            color: #1c1c1e;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            border-radius: 24px;
+            padding: 30px 24px;
+            animation: fadeInScale 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        :root.dark-mode .modal-content {
+            background: rgba(28, 28, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-content h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .modal-content p {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.4;
+        }
+
+        /* 微型控制按钮 */
+        .mini-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 11.5px;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        :root.light-mode .mini-btn {
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        .mini-btn:active {
+            opacity: 0.7;
+        }
+
+        .mini-btn.primary {
+            background: var(--accent-btn);
+            color: var(--accent-btn-text);
+            border: none;
+        }
+
+        /* 折叠部分 */
+        .accordion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .acc-icon {
+            font-size: 10px;
+            color: var(--text-secondary);
+            transition: transform 0.2s;
+        }
+
+        .accordion-content {
+            display: none;
+            margin-top: 14px;
+            animation: fadeInScale 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .mini-list {
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--glass-border);
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        :root.dark-mode .mini-list {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* ---------------- 下拉功能菜单 ---------------- */
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 24px;
+            top: 50px;
+            width: 130px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            box-shadow: 0 10px 25px var(--shadow);
+            z-index: 100;
+            padding: 6px;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .dropdown-item {
+            padding: 10px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .dropdown-item:active {
+            background: var(--card-hover);
+        }
+
+        /* ---------------- 头像长方形导入框 ---------------- */
+        .avatar-uploader-box {
+            width: 100px;
+            height: 120px;
+            border: 1px dashed var(--glass-border);
+            background: var(--input-bg);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .avatar-uploader-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* ---------------- 一行排列的角色卡库（自适应弹性流式布局） ---------------- */
+        .profile-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .profile-card {
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            background: var(--glass-bg);
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .profile-card:active {
+            transform: scale(0.96);
+        }
+
+        .profile-card.selected-delete {
+            border-color: var(--text-primary);
+            box-shadow: 0 0 10px var(--shadow);
+            background: var(--card-hover);
+        }
+
+        .profile-card-img-wrapper {
+            width: 100%;
+            aspect-ratio: 1 / 1.2;
+            border-radius: 8px;
+            background: var(--input-bg);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 6px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .profile-card-img-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .profile-card-name {
+            font-size: 10.5px;
+            font-weight: 500;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        /* 绑定指示卡 */
+        .bind-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .bind-card-btn {
+            flex: 1;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 12.5px;
+            font-weight: 500;
+        }
+
+        .bind-avatar {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid var(--glass-border);
+            background: var(--input-bg);
+        }
+
+        /* 人称代词配置样式 */
+        .pronoun-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .pronoun-btn, .pronoun-sub-btn {
+            background: var(--input-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .pronoun-btn:active, .pronoun-sub-btn:active {
+            opacity: 0.7;
+        }
+
+        .pronoun-btn.active, .pronoun-sub-btn.active {
+            background: rgba(0, 0, 0, 0.08);
+            border-color: var(--text-primary);
+        }
+
+        :root.dark-mode .pronoun-btn.active, :root.dark-mode .pronoun-sub-btn.active {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* 双轨思维链展示框架 */
+        .output-double-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .thought-panel {
+            background: var(--input-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 16px;
+            font-family: monospace;
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 全局微缩自适应毛玻璃背景图 ( z-index 设为 -3，提供 iOS 原生背景融合)  -->
+    <div id="global-wallpaper" class="global-wallpaper-layer"></div>
+
+    <!-- 柔光物理折射源 -->
+    <div class="bg-glow-container">
+        <div class="bg-glow-orb orb-1"></div>
+        <div class="bg-glow-orb orb-2"></div>
+    </div>
+
+    <!-- 全屏自适应容器 -->
+    <div class="app-container">
+        
+        <!-- 用户手机同步状态栏 -->
+        <div class="status-bar">
+            <div id="status-time">00:00</div>
+            
+            <div class="status-bar-right">
+                <div class="status-signal-vector" id="network-signal-icon">
+                    <svg viewBox="0 0 17 11" fill="currentColor">
+                        <rect x="0" y="8" width="2.5" height="3" rx="0.6" />
+                        <rect x="4.5" y="5.5" width="2.5" height="5.5" rx="0.6" />
+                        <rect x="9" y="3" width="2.5" height="8" rx="0.6" />
+                        <rect x="13.5" y="0" width="2.5" height="11" rx="0.6" />
+                    </svg>
+                </div>
+                
+                <div id="network-type" style="font-size: 11px; font-weight: 600;">5G</div>
+                
+                <div class="battery-container">
+                    <span id="battery-charging-bolt" class="charging-bolt" title="正在充电">
+                        <svg viewBox="0 0 24 24">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                    </span>
+                    <span id="battery-text">--%</span>
+                    <div class="battery-shell">
+                        <div id="battery-fill" class="battery-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视图切换主区域 -->
+        <div class="view-content">
+
+            <!-- 主页面 -->
+            <div id="home-view" class="view active">
+                <header class="app-header">
+                    <div class="title-row">
+                        <h1>耳机の小剧场游玩区</h1>
+                        <button class="theme-toggle" onclick="toggleTheme()" title="切换日/夜间模式">
+                            <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <p>theater play zone</p>
+                </header>
+
+                <div class="list-stack">
+                    
+                    <div class="list-card" onclick="switchView('play-view')">
+                        <div class="list-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+                        </div>
+                        <div class="list-card-content">
+                            <div class="list-card-title">开启小剧场</div>
+                            <div class="list-card-desc">输入小剧场指令，生成小剧场游玩</div>
+                        </div>
+                        <div class="list-card-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                    </div>
+
+                    <!-- 生成小剧场指令 Landing Sub-Menu 中转导航卡  -->
+                    <div class="list-card" onclick="switchView('prompt-view')">
+                        <div class="list-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                        </div>
+                        <div class="list-card-content">
+                            <div class="list-card-title">生成小剧场指令</div>
+                            <div class="list-card-desc">生成小剧场指令与 HTML 区 </div>
+                        </div>
+                        <div class="list-card-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                    </div>
+
+                    <div class="list-card" onclick="switchView('api-view')">
+                        <div class="list-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        </div>
+                        <div class="list-card-content">
+                            <div class="list-card-title">配置 API</div>
+                            <div class="list-card-desc">配置外部大模型 URL 与密钥连接</div>
+                        </div>
+                        <div class="list-card-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                    </div>
+
+                    <!-- 主题与数据 APP  -->
+                    <div class="list-card" onclick="switchView('theme-view')">
+                        <div class="list-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                        </div>
+                        <div class="list-card-content">
+                            <div class="list-card-title">主题与数据</div>
+                            <div class="list-card-desc">全局主题加载与数据跨端安全备份 </div>
+                        </div>
+                        <div class="list-card-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- API 配置页面 -->
+            <div id="api-view" class="view">
+                <div class="view-header">
+                    <button class="back-btn" onclick="switchView('home-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>配置 API 通道</h2>
+                </div>
+
+                <div class="glass-panel">
+                    <div class="input-group">
+                        <label for="api-url">API URL (基础接口)</label>
+                        <input type="text" id="api-url" placeholder="https://api.openai.com/v1">
+                    </div>
+
+                    <div class="input-group" style="margin-bottom: 24px;">
+                        <label for="api-key">API Key (通信密钥)</label>
+                        <input type="password" id="api-key" placeholder="sk-...">
+                    </div>
+
+                    <button class="mono-btn secondary" onclick="fetchModels()">
+                        <div id="loading-spinner" class="spinner"></div>
+                        <span id="btn-text">拉取服务模型列表</span>
+                    </button>
+                </div>
+
+                <div class="glass-panel" style="padding: 18px 20px;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 500; letter-spacing: 0.5px;">
+                        选择拉取到的目标模型
+                    </div>
+                    <div id="model-list" class="model-list-box">
+                        <div class="placeholder-text">暂无已拉取的模型，请在上方输入并点击拉取</div>
+                    </div>
+                </div>
+
+                <button class="mono-btn" onclick="saveConfiguration()">
+                    <span>保存当前模型配置</span>
+                </button>
+            </div>
+
+            <!-- 开启小剧场 APP 页面 -->
+            <div id="play-view" class="view">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <!-- 左上角返回主菜单 -->
+                    <button class="back-btn" onclick="switchView('home-view')" style="margin-right: 0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;">
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                    </button>
+                    <h2 style="font-size: 20px; font-weight: 500; text-align: center; flex: 1;">开启小剧场 <span id="play-mode-badge" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; background: var(--input-bg); border: 1px solid var(--glass-border); color: var(--text-secondary); margin-left: 4px;">纯文本</span></h2>
+                    
+                    <!-- 右上角组：小音符归档箱(左) + 三横菜单(右) -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="back-btn" onclick="openSavedSessionsView()" style="margin-right: 0;" title="已保存的剧场内容">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;">
+                                <path d="M9 18V5l12-2v13"></path>
+                                <circle cx="6" cy="18" r="3"></circle>
+                                <circle cx="18" cy="16" r="3"></circle>
+                            </svg>
+                        </button>
+                        <button class="back-btn" onclick="togglePlayMenu()" style="margin-right: 0;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="width:22px; height:22px;">
+                                <line x1="3" y1="12" x2="21" y2="12"></line>
+                                <line x1="3" y1="6" x2="21" y2="6"></line>
+                                <line x1="3" y1="18" x2="21" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <!-- 下拉功能选择菜单 -->
+                    <div id="play-menu-dropdown" class="dropdown-menu" style="right: 24px; top: 50px;">
+                        <div class="dropdown-item" onclick="openProfileView('char')">char人设</div>
+                        <div class="dropdown-item" onclick="openProfileView('user')">user人设</div>
+                    </div>
+                </div>
+
+                <!-- 输入框面板 -->
+                <div class="glass-panel" style="padding: 18px 20px; margin-bottom: 12px; position: relative;">
+                    <textarea id="play-input" placeholder="请在此输入或选择导入下方小剧场设定指令..." style="width: 100%; height: 160px; background: transparent; border: none; outline: none; resize: none; color: var(--text-primary); font-size: 13.5px; line-height: 1.6;"></textarea>
+                    
+                    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                        <button class="mini-btn" onclick="clearPlayInput()">清空</button>
+                        <button class="mini-btn primary" onclick="savePlayInput()">保存</button>
+                    </div>
+                </div>
+
+                <!-- 绑定人设配置行 (强制绑定) -->
+                <div class="bind-row">
+                    <div class="bind-card-btn" onclick="triggerProfileBind('char')">
+                        <img id="bind-char-avatar" class="bind-avatar" src="" style="display:none;">
+                        <span id="bind-char-text">绑定 Char 人设卡</span>
+                    </div>
+                    <div class="bind-card-btn" onclick="triggerProfileBind('user')">
+                        <img id="bind-user-avatar" class="bind-avatar" src="" style="display:none;">
+                        <span id="bind-user-text">绑定 User 人设卡</span>
+                    </div>
+                </div>
+
+                <!-- 人称代词配置面板 -->
+                <div class="glass-panel" style="padding: 14px 18px; margin-bottom: 12px;">
+                    <span style="font-size: 13.5px; font-weight: 500; display:block; margin-bottom:12px;">人称代词选择</span>
+                    
+                    <div style="margin-bottom: 14px;">
+                        <div style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 6px;">Char 代称指代</div>
+                        <div class="pronoun-group" id="char-pronoun-group">
+                            <button class="pronoun-btn active" onclick="setPronoun('char', '1', this)">我</button>
+                            <button class="pronoun-btn" onclick="setPronoun('char', '2', this)">你</button>
+                            <button class="pronoun-btn" onclick="setPronoun('char', '3', this)">第三人称</button>
+                        </div>
+                        <div id="char-pronoun-sub" style="display:none; margin-top:8px; gap:8px;">
+                            <button class="pronoun-sub-btn active" onclick="setPronounSub('char', '他', this)">他</button>
+                            <button class="pronoun-sub-btn" onclick="setPronounSub('char', '她', this)">她</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 6px;">User 代称指代</div>
+                        <div class="pronoun-group" id="user-pronoun-group">
+                            <button class="pronoun-btn active" onclick="setPronoun('user', '1', this)">我</button>
+                            <button class="pronoun-btn" onclick="setPronoun('user', '2', this)">你</button>
+                            <button class="pronoun-btn" onclick="setPronoun('user', '3', this)">第三人称</button>
+                        </div>
+                        <div id="user-pronoun-sub" style="display:none; margin-top:8px; gap:8px;">
+                            <button class="pronoun-sub-btn active" onclick="setPronounSub('user', '他', this)">他</button>
+                            <button class="pronoun-sub-btn" onclick="setPronounSub('user', '她', this)">她</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 破限配置区域 -->
+                <div class="glass-panel" style="padding: 14px 18px; margin-bottom: 12px;">
+                    <div style="display:flex; align-items:center; gap: 8px; margin-bottom: 10px;">
+                        <input type="checkbox" id="break-enabled" style="width: 16px; height: 16px; cursor: pointer;">
+                        <label for="break-enabled" style="font-size: 13.5px; font-weight: 500; cursor: pointer;">开启破限</label>
+                    </div>
+                    <div class="input-group" style="margin-bottom: 10px;">
+                        <textarea id="break-words" placeholder="请在此输入您的破限词..." style="height: 60px; font-size: 13px; resize:none;"></textarea>
+                    </div>
+                    <button class="mini-btn" onclick="saveBreakConfig()" style="width: 100%; justify-content: center;">保存破限设置</button>
+                </div>
+
+                <!-- 禁止输出方向配置 -->
+                <div class="glass-panel" style="padding: 14px 18px; margin-bottom: 12px;">
+                    <span style="font-size: 13.5px; font-weight: 500; display:block; margin-bottom:10px;">禁止输出方向</span>
+                    <div class="input-group" style="margin-bottom: 0;">
+                        <textarea id="forbidden-directions" placeholder="用户可在此填写禁止输出的方向或内容..." style="height: 60px; font-size: 13px; resize:none;"></textarea>
+                    </div>
+                </div>
+
+                <!-- 已存小剧场指令库 -->
+                <div class="glass-panel" style="padding: 14px 18px; margin-bottom: 12px;">
+                    <div class="accordion-header" onclick="toggleAccordion('saved-theaters-acc')">
+                        <span style="font-size: 13.5px; font-weight: 500;">小剧场指令保存</span>
+                        <span class="acc-icon" id="saved-theaters-acc-icon">▼</span>
+                    </div>
+                    <div id="saved-theaters-acc" class="accordion-content">
+                        <div id="saved-theater-list" class="mini-list" style="margin-bottom: 10px;"></div>
+                        <div style="display: flex; justify-content: space-between; gap: 8px;">
+                            <button class="mini-btn" onclick="openSaveNameModal()" style="flex: 1;">保存当前输入</button>
+                            <button class="mini-btn primary" onclick="importSelectedTheater()" style="flex: 1;">导入</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 生成小剧场指令APP集成关联 -->
+                <div class="glass-panel" style="padding: 14px 18px; margin-bottom: 16px;">
+                    <div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 500;">生成小剧场的指令</div>
+                    <div class="accordion-header" onclick="toggleAccordion('prompt-app-acc')">
+                        <span style="font-size: 13.5px; font-weight: 500;">高级展开：查看生成的指令</span>
+                        <span class="acc-icon" id="prompt-app-acc-icon">▼</span>
+                    </div>
+                    <div id="prompt-app-acc" class="accordion-content">
+                        <div id="generator-prompt-list" class="mini-list" style="margin-bottom: 10px;"></div>
+                        <button class="mini-btn primary" onclick="importSelectedGeneratorPrompt()" style="width: 100%;">导入游玩</button>
+                    </div>
+                </div>
+
+                <!-- 输出模式切换勾选 -->
+                <div style="display:flex; justify-content: flex-end; gap: 15px; margin-bottom: 12px; font-size: 13px; font-weight: 500;">
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                        <input type="radio" name="output-mode" value="stream" checked style="cursor:pointer;"> 流式输出
+                    </label>
+                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                        <input type="radio" name="output-mode" value="static" style="cursor:pointer;"> 非流式输出
+                    </label>
+                </div>
+
+                <!-- API 触发执行 -->
+                <button class="mono-btn" id="start-api-play-btn" onclick="startAPIPlay()" style="margin-bottom: 16px;">
+                    <div id="play-spinner" class="spinner" style="border-top-color: var(--accent-btn-text);"></div>
+                    <span>API 开始生成小剧场</span>
+                </button>
+
+                <!-- 输出双轨：思维链思考过程 & 最终剧本渲染区 -->
+                <div id="play-output-container" style="display: none;">
+                    <div class="output-double-grid">
+                        <div class="glass-panel" style="padding: 16px; margin-bottom: 0;">
+                            <div style="font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--glass-border); padding-bottom: 8px; margin-bottom: 10px; font-weight: 600;">
+                                思维链思考过程
+                            </div>
+                            <div id="thought-content" class="thought-panel">正在构思深度推理路径...</div>
+                        </div>
+
+                        <div class="glass-panel" style="padding: 20px; margin-bottom: 0; position: relative;">
+                            <div style="font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                                <span>小剧场正式场景</span>
+                                <button class="mini-btn" onclick="copyPlayOutput()" style="padding: 4px 10px;">复制剧本</button>
+                            </div>
+                            <div id="play-output-content" style="font-size: 13.5px; line-height: 1.6; color: var(--text-primary); word-break: break-all;"></div>
+                        </div>
+                    </div>
+
+                    <!-- 保存此次生成的内容 -->
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="mono-btn secondary" onclick="openSaveSessionModal()" style="flex: 1;">保存此次小剧场</button>
+                        <button class="mono-btn secondary" onclick="discardSession()" style="flex: 1; background: transparent;">不保存</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 人设配置与编辑界面 -->
+            <div id="profile-edit-view" class="view">
+                <div class="view-header" style="display:flex; justify-content: space-between; align-items: center;">
+                    <button class="back-btn" onclick="switchView('play-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2 id="profile-edit-title">配置人设卡</h2>
+                    <!-- 右上角小箱子 -->
+                    <button class="back-btn" onclick="openProfileLibrary()" style="margin-right:0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;">
+                            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                            <rect x="1" y="3" width="22" height="5"></rect>
+                            <line x1="10" y1="12" x2="14" y2="12"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="glass-panel">
+                    <div class="input-group">
+                        <label id="profile-name-label">名字</label>
+                        <input type="text" id="profile-name-input" placeholder="输入名字">
+                    </div>
+
+                    <div style="display: flex; gap: 15px; margin-bottom: 18px;">
+                        <div>
+                            <label style="display:block; font-size:11.5px; color:var(--text-secondary); margin-bottom:8px; font-weight:500;">头像</label>
+                            <div class="avatar-uploader-box" onclick="triggerAvatarUpload()">
+                                <img id="profile-avatar-preview" style="display:none;">
+                                <div id="profile-avatar-placeholder" style="text-align:center; font-size:12px; color:var(--text-secondary); padding:10px;">点击选择头像</div>
+                            </div>
+                            <input type="file" id="avatar-file-input" accept="image/png, image/jpeg" style="display:none;" onchange="handleAvatarFile(event)">
+                        </div>
+
+                        <div style="flex:1; display:flex; flex-direction:column;">
+                            <label style="display:block; font-size:11.5px; color:var(--text-secondary); margin-bottom:8px; font-weight:500;">详细设定</label>
+                            <textarea id="profile-desc-input" placeholder="输入人设描述..." style="flex:1; width:100%; background:var(--input-bg); border:1px solid var(--glass-border); border-radius:12px; padding:12px; color:var(--text-primary); font-size:13.5px; outline:none; resize:none;"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- 导入 DOCX / TXT / JSON(酒馆卡)  -->
+                    <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
+                        <button class="mini-btn" onclick="triggerProfileImport()" style="flex:1; justify-content:center;">导入人设 (支持DOCX/TXT/JSON酒馆卡) </button>
+                        <input type="file" id="profile-import-input" accept=".txt, .docx, .rtf, .md, .json" style="display:none;" onchange="handleProfileImport(event)">
+                    </div>
+
+                    <button class="mono-btn" onclick="saveProfileCard()">保存角色卡</button>
+                </div>
+            </div>
+
+            <!-- 角色卡库 (小箱子界面) -->
+            <div id="profile-library-view" class="view">
+                <div class="view-header" style="display:flex; justify-content: space-between; align-items: center;">
+                    <button class="back-btn" onclick="closeProfileLibrary()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2 id="profile-library-title">人设库</h2>
+                    <button class="mini-btn" id="multiselect-toggle-btn" onclick="toggleMultiSelectMode()" style="margin-right:0;">多选</button>
+                </div>
+
+                <div class="glass-panel" style="flex:1; display:flex; flex-direction:column;">
+                    <div id="library-container" style="flex:1; overflow-y:auto; max-height: 520px;">
+                        <div class="profile-grid" id="profile-grid-list"></div>
+                    </div>
+                    <button class="mono-btn" id="library-delete-btn" onclick="deleteSelectedProfiles()" style="display:none; background:var(--accent-btn); color:var(--accent-btn-text); margin-top:15px;">删除已选角色卡</button>
+                </div>
+            </div>
+
+            <!-- 已保存的历史小剧场归档箱 (音符界面) -->
+            <div id="saved-sessions-view" class="view">
+                <div class="view-header">
+                    <button class="back-btn" onclick="switchView('play-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>已保存小剧场</h2>
+                </div>
+                <div id="sessions-container" style="flex:1; overflow-y:auto; max-height:600px;"></div>
+            </div>
+
+            <!-- 生成小剧场指令 Landing Sub-Menu 中转导航界面  -->
+            <div id="prompt-view" class="view">
+                <div class="view-header" style="width:100%;">
+                    <button class="back-btn" onclick="switchView('home-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>生成小剧场指令</h2>
+                </div>
+
+                <!-- 往下展开的两个长方形组件卡片  -->
+                <div class="list-stack">
+                    <!-- 1. 小剧场指令生成 -->
+                    <div class="list-card" onclick="switchView('prompt-generator-view')">
+                        <div class="list-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 20h9"></path>
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                            </svg>
+                        </div>
+                        <div class="list-card-content">
+                            <div class="list-card-title">小剧场指令生成</div>
+                            <div class="list-card-desc">自动转化细节走向大纲为标准的重写指令集 </div>
+                        </div>
+                        <div class="list-card-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                    </div>
+
+                    <!-- 2. HTML 创意生成 -->
+                    <div class="list-card" onclick="switchView('html-generator-view')">
+                        <div class="list-card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
+                        </div>
+                        <div class="list-card-content">
+                            <div class="list-card-title">HTML 创意生成</div>
+                            <div class="list-card-desc">纯 CSS 原生动画驱动的交互小组件设计板 </div>
+                        </div>
+                        <div class="list-card-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 小剧场指令实际配置台页面  -->
+            <div id="prompt-generator-view" class="view">
+                <div class="view-header" style="display:flex; justify-content: space-between; align-items: center; width:100%;">
+                    <button class="back-btn" onclick="switchView('prompt-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>生成指令台</h2>
+                    <button class="back-btn" onclick="openPromptLibrary()" style="margin-right:0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;">
+                            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                            <rect x="1" y="3" width="22" height="5"></rect>
+                            <line x1="10" y1="12" x2="14" y2="12"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="glass-panel">
+                    <div class="input-group">
+                        <label>小剧场指令名字</label>
+                        <input type="text" id="prompt-name" placeholder="请输入指令名称 (如: 吸血鬼小剧场)">
+                    </div>
+                    <div class="input-group">
+                        <label>剧本核心走向设定内容</label>
+                        <textarea id="prompt-input-content" placeholder="请在此输入大概剧本核心设定或走向内容..." style="height:150px;"></textarea>
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap: 8px; margin-bottom: 12px;">
+                        <input type="checkbox" id="prompt-break-enabled" style="width: 16px; height: 16px; cursor: pointer;">
+                        <label for="prompt-break-enabled" style="font-size: 13.5px; font-weight: 500; cursor: pointer;">开启破限</label>
+                    </div>
+
+                    <div class="input-group" style="margin-bottom: 15px;">
+                        <label>禁止输出内容方向</label>
+                        <textarea id="prompt-forbidden-directions" placeholder="请输入禁止输出的内容方向..." style="height: 60px; resize:none;"></textarea>
+                    </div>
+
+                    <div style="display:flex; justify-content: flex-end; gap: 15px; margin-bottom: 12px; font-size: 13px; font-weight: 500;">
+                        <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="radio" name="prompt-output-mode" value="stream" checked style="cursor:pointer;"> 流式输出
+                        </label>
+                        <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="radio" name="prompt-output-mode" value="static" style="cursor:pointer;"> 非流式输出
+                        </label>
+                    </div>
+
+                    <button class="mono-btn" id="start-api-prompt-btn" onclick="startAPIPromptGen()">
+                        <div id="prompt-spinner" class="spinner" style="border-top-color: var(--accent-btn-text);"></div>
+                        <span>生成小剧场指令</span>
+                    </button>
+                </div>
+
+                <!-- 生成指令输出及自省思考过程 -->
+                <div id="prompt-output-container" style="display: none; margin-top: 15px;">
+                    <div class="glass-panel" style="padding: 16px; margin-bottom: 12px;">
+                        <div style="font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--glass-border); padding-bottom: 8px; margin-bottom: 10px; font-weight: 600;">
+                            思考推理路径
+                        </div>
+                        <div id="prompt-thought-content" class="thought-panel">正在构思深度推理路径...</div>
+                    </div>
+
+                    <div class="glass-panel" style="padding: 20px;">
+                        <div style="font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>生成的小剧场指令 (已自省重写)</span>
+                            <button class="mini-btn" onclick="copyPromptOutput()" style="padding: 4px 10px;">复制指令</button>
+                        </div>
+                        <div id="prompt-output-content" style="font-size: 13.5px; line-height: 1.6; color: var(--text-primary); word-break: break-all; white-space: pre-wrap; background: var(--input-bg); border-radius: 12px; padding: 15px; border: 1px solid var(--glass-border);"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 已保存小剧场指令库 (小小箱子界面) -->
+            <div id="prompt-library-view" class="view">
+                <div class="view-header" style="display:flex; justify-content: space-between; align-items: center;">
+                    <button class="back-btn" onclick="switchView('prompt-generator-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>已生成指令仓库</h2>
+                    <button class="mini-btn" id="prompt-multiselect-toggle-btn" onclick="togglePromptMultiSelectMode()" style="margin-right:0;">多选</button>
+                </div>
+
+                <div class="glass-panel" style="flex:1; display:flex; flex-direction:column;">
+                    <div id="prompt-library-container" style="flex:1; overflow-y:auto; max-height: 520px;"></div>
+                    <button class="mono-btn" id="prompt-library-delete-btn" onclick="deleteSelectedPrompts()" style="display:none; background:var(--accent-btn); color:var(--accent-btn-text); margin-top:15px;">删除已选指令卡</button>
+                </div>
+            </div>
+
+            <!-- 独立 HTML 生成应用页面 -->
+            <div id="html-generator-view" class="view">
+                <div class="view-header" style="display:flex; justify-content: space-between; align-items: center;">
+                    <button class="back-btn" onclick="switchView('prompt-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>HTML 组件创意生成</h2>
+                    <!-- 右上角一本书的矢量图标 -->
+                    <button class="back-btn" onclick="openHtmlLibrary()" style="margin-right:0;" title="打开保存库">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px; height:20px;">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="glass-panel">
+                    <div class="input-group">
+                        <label>HTML 名字</label>
+                        <input type="text" id="html-gen-name" placeholder="请输入HTML名字 (例如：日记翻折卡)">
+                    </div>
+                    <div class="input-group">
+                        <label>大概想要的 HTML 内容/交互功能描述</label>
+                        <textarea id="html-gen-content" placeholder="想要如何互动？(如: 一个具有拉开撕毁动画的小票根，拉开显现字样)" style="height:120px;"></textarea>
+                    </div>
+                    <div class="input-group" style="margin-bottom:15px;">
+                        <label>禁止输出方向</label>
+                        <input type="text" id="html-gen-forbidden" placeholder="禁止输出的方向 (例如: 禁止输出彩色，只用黑白灰)">
+                    </div>
+
+                    <!-- 输出模式切换 -->
+                    <div style="display:flex; justify-content: flex-end; gap: 15px; margin-bottom: 12px; font-size: 13px; font-weight: 500;">
+                        <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="radio" name="html-gen-output-mode" value="stream" checked style="cursor:pointer;"> 流式输出
+                        </label>
+                        <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="radio" name="html-gen-output-mode" value="static" style="cursor:pointer;"> 非流式输出
+                        </label>
+                    </div>
+
+                    <button class="mono-btn" id="start-api-html-btn" onclick="startAPIHtmlGen()">
+                        <div id="html-spinner" class="spinner" style="border-top-color: var(--accent-btn-text);"></div>
+                        <span>生成 HTML 交互组件</span>
+                    </button>
+                </div>
+
+                <!-- 生成实时展现面板 -->
+                <div id="html-gen-output-container" style="display: none; margin-top: 15px;">
+                    <!-- 50% 物理高度自适应代码区 -->
+                    <div class="glass-panel" style="padding: 16px; margin-bottom: 12px;">
+                        <div style="font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--glass-border); padding-bottom: 8px; margin-bottom: 10px; font-weight: 600;">
+                            生成 HTML 源码 (禁止输出任何 JS 脚本)
+                        </div>
+                        <div style="position: relative; width: 100%;">
+                            <!-- 代码静观状态 -->
+                            <div id="html-gen-code-display" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; border: 1px solid var(--glass-border); padding: 12px; background: var(--input-bg); border-radius: 8px; word-break: break-all; white-space: pre-wrap;"></div>
+                            <!-- 代码即时修改状态 (高度完全自适应，keystroke 毫秒映射) -->
+                            <textarea id="html-gen-code-editor" oninput="mirrorHtmlGenEditor()" style="display: none; width: 100%; height: 200px; font-family: monospace; font-size: 12px; border: 1px solid var(--glass-border); padding: 12px; background: var(--input-bg); border-radius: 8px; color: var(--text-primary); outline: none; resize: vertical;"></textarea>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                            <button class="mini-btn" id="html-copy-btn" onclick="copyHtmlGenCode()">一键复制</button>
+                            <button class="mini-btn" id="html-edit-btn" onclick="toggleHtmlEditMode()">修改</button>
+                            <button class="mini-btn primary" onclick="saveGeneratedHtmlCard()">保存卡片</button>
+                        </div>
+                    </div>
+
+                    <!-- 下方 HTML 可点击游玩自适应画布区域 -->
+                    <div class="glass-panel" style="padding: 20px;">
+                        <div style="font-size: 11.5px; color: var(--text-secondary); border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; margin-bottom: 14px; font-weight: 600;">
+                            画布渲染效果实时预览 (可点击滑动测试)
+                        </div>
+                        <!-- 自适应弹性高度，取消强行空白限制 -->
+                        <div id="html-gen-canvas-preview" style="border: 1px solid var(--glass-border); padding: 15px; height: auto; min-height: 40px; overflow: visible; border-radius: 12px; background: var(--glass-bg);"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 已保存的 HTML 小本本归档库 (一本书打开的界面) -->
+            <div id="html-library-view" class="view">
+                <div class="view-header" style="display:flex; justify-content: space-between; align-items: center;">
+                    <button class="back-btn" onclick="switchView('html-generator-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>HTML 归档库</h2>
+                    <button class="mini-btn" id="html-multiselect-toggle-btn" onclick="toggleHtmlMultiSelectMode()" style="margin-right:0;">多选</button>
+                </div>
+
+                <div class="glass-panel" style="flex:1; display:flex; flex-direction:column;">
+                    <div id="html-library-container" style="flex:1; overflow-y:auto; max-height: 520px;"></div>
+                    <button class="mono-btn" id="html-library-delete-btn" onclick="deleteSelectedHtmlCards()" style="display:none; background:var(--accent-btn); color:var(--accent-btn-text); margin-top:15px;">删除已选归档卡</button>
+                </div>
+            </div>
+
+            <!-- 主题与数据管理子应用 m -->
+            <div id="theme-view" class="view">
+                <div class="view-header">
+                    <button class="back-btn" onclick="switchView('home-view')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2>主题与数据</h2>
+                </div>
+
+                <!-- 1. 全局背景壁纸加载  -->
+                <div class="glass-panel">
+                    <span style="font-size:14.5px; font-weight:600; display:block; margin-bottom:12px;">全局背景美化</span>
+                    <div style="display:flex; gap:15px; align-items:center; margin-bottom:15px;">
+                        <button class="mini-btn primary" onclick="triggerWallpaperUpload()">选择全局背景壁纸</button>
+                        <button class="mini-btn" onclick="clearGlobalWallpaper()">重置壁纸</button>
+                        <input type="file" id="wallpaper-upload-input" accept="image/png, image/jpeg" style="display:none;" onchange="handleWallpaperUpload(event)">
+                    </div>
+                    <!-- 无级毛玻璃模糊滑块  -->
+                    <div class="input-group" style="margin-bottom:0;">
+                        <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary); margin-bottom:6px;">
+                            <span>背景毛玻璃磨砂度</span>
+                            <span id="blur-val-text">0%</span>
+                        </div>
+                        <input type="range" id="wallpaper-blur-slider" min="0" max="100" value="0" oninput="updateWallpaperFilters()" style="width:100%; cursor:pointer;">
+                    </div>
+                </div>
+
+                <!-- 2. 数据跨端无损备份还原  -->
+                <div class="glass-panel">
+                    <span style="font-size:14.5px; font-weight:600; display:block; margin-bottom:12px;">数据备份与多端还原</span>
+                    <p style="font-size:12px; color:var(--text-secondary); line-height:1.5; margin-bottom:15px;">
+                        导出包含所有通道、历史小剧场、指令库、人设库在内的标准JSON备份数据。支持通过各平台浏览器或WebView/APK多端无损导入还原 。
+                    </p>
+                    <div style="display:flex; gap:10px;">
+                        <button class="mini-btn primary" onclick="exportAllData()" style="flex:1; justify-content:center;">导出备份 (JSON)</button>
+                        <button class="mini-btn" onclick="triggerDataImport()" style="flex:1; justify-content:center;">恢复备份 (JSON)</button>
+                        <input type="file" id="data-import-input" accept=".json" style="display:none;" onchange="handleDataImport(event)">
+                    </div>
+                </div>
+                <!-- 3. 全屏沉浸模式 -->
+                <div class="glass-panel">
+                    <span style="font-size:14.5px; font-weight:600; display:block; margin-bottom:12px;">全屏沉浸模式</span>
+                    <p style="font-size:12px; color:var(--text-secondary); line-height:1.5; margin-bottom:15px;">
+                        利用浏览器原生 API 强制全屏，以此临时遮蔽隐藏手机/平板或电脑浏览器的顶栏、地址栏与虚拟底栏。
+                    </p>
+                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                        <span style="font-size:13px; font-weight:500;">开启极速全屏</span>
+                        <button class="mini-btn primary" id="fullscreen-btn" onclick="toggleBrowserFullscreen()">点击全屏</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 绑定角色卡临时列表弹窗 -->
+            <div id="bind-profile-modal" class="modal-overlay">
+                <div class="modal-content glass-panel" style="max-height: 80vh; overflow-y:auto;">
+                    <h3 id="bind-modal-title">选择要绑定的角色卡</h3>
+                    <p style="margin-bottom:15px;">请在以下列表中点击选择人设进行剧场生成绑定</p>
+                    <div id="bind-modal-list" class="model-list-box" style="max-height: 300px; margin-bottom: 20px;"></div>
+                    <button class="mono-btn secondary" onclick="closeProfileBindModal()">取消</button>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="toast" class="toast">提示信息</div>
+    </div>
+
+    <!-- 剧场类型选择弹窗 overlay (高透亮柔光) -->
+    <div id="play-mode-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <h3>选择剧场类型</h3>
+            <p>请选择接下来大模型生成小剧场的呈现模式</p>
+            <button class="mono-btn" onclick="selectPlayMode('text')" style="margin-bottom: 12px;">生成纯文本小剧场</button>
+            <button class="mono-btn secondary" onclick="selectPlayMode('interactive')">生成HTML可点击小剧场</button>
+        </div>
+    </div>
+
+    <!-- 小剧场命名保存弹窗 overlay (高透亮柔光) -->
+    <div id="save-name-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <h3>保存小剧场</h3>
+            <p>为当前输入框的设定及指令集命名，以便日后一键导入游玩</p>
+            <div class="input-group" style="margin-bottom: 20px;">
+                <input type="text" id="new-theater-name" placeholder="请在此输入名称 (例如：将军与间谍人设)">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="mono-btn secondary" style="flex: 1;" onclick="closeSaveNameModal()">取消</button>
+                <button class="mono-btn" style="flex: 1;" onclick="confirmSaveTheater()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史生成剧作保存弹窗 overlay (高透亮柔光) -->
+    <div id="save-session-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <h3>保存此次生成的剧作</h3>
+            <p>请输入保存此小剧场的名称，以便日后在归档音符面板中查看</p>
+            <div class="input-group" style="margin-bottom: 20px;">
+                <input type="text" id="new-session-name" placeholder="请输入剧本名称">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="mono-btn secondary" style="flex: 1;" onclick="closeSaveSessionModal()">取消</button>
+                <button class="mono-btn" style="flex: 1;" onclick="confirmSaveSession()">确定保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史生成指令保存弹窗 overlay -->
+    <div id="save-prompt-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <h3>保存此次生成的指令</h3>
+            <p>请输入保存此剧场指令的名称，以便日后在归档宝箱面板中查看</p>
+            <div class="input-group" style="margin-bottom: 20px;">
+                <input type="text" id="new-prompt-name" placeholder="请输入指令名称">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="mono-btn secondary" style="flex: 1;" onclick="closeSavePromptModal()">取消</button>
+                <button class="mono-btn" style="flex: 1;" onclick="confirmSavePrompt()">确定保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 大弹窗：完整查看小剧场 (极简无渐变) -->
+    <div id="full-viewer-modal" class="modal-overlay">
+        <div class="modal-content glass-panel" style="max-width: 440px; width: 92%; height: 85vh; display: flex; flex-direction: column; padding: 20px 24px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 12px; margin-bottom: 16px;">
+                <h3 id="viewer-modal-title" style="font-size: 16px; margin-bottom: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%;">小剧场全文</h3>
+                
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <!-- 无级字号流动缩放控制 -->
+                    <div style="display: flex; gap: 4px; border: 1px solid var(--glass-border); border-radius: 8px; padding: 2px;">
+                        <button class="mini-btn" onclick="adjustZoom(-2)" style="padding: 2px 8px; font-size: 10px; border:none; background:transparent;">A-</button>
+                        <button class="mini-btn" onclick="adjustZoom(2)" style="padding: 2px 8px; font-size: 10px; border:none; background:transparent;">A+</button>
+                    </div>
+                    <!-- 关闭交叉按钮 -->
+                    <button class="back-btn" onclick="closeFullViewerModal()" style="margin-right: 0; padding: 4px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="viewer-modal-body" style="flex: 1; overflow-y: auto; font-size: 14px; line-height: 1.6; word-break: break-all; transition: font-size 0.2s ease;"></div>
+        </div>
+    </div>
+
+    <!-- 二传免责弹窗警告 overlay -->
+    <div id="warning-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <h3 style="color: var(--text-primary);">导入风险警告</h3>
+            <p style="font-size:13.5px; font-weight:500; line-height:1.6; margin-bottom:20px;">
+                请勿导入二传人设，出了问题一切与制作者【耳机】无关。
+            </p>
+            <button class="mono-btn" id="warning-confirm-btn" onclick="dismissWarningPermanently()" disabled>
+                确认 (3s)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ---------------- 0. PWA 动态安装环境支持 ----------------
+        (function() {
+            try {
+                const appName = "耳机の小剧场游玩区";
+                const appShortName = "耳机小剧场";
+                // 绘制极简、精美的 SVG 图标，融合了耳机线条与小剧场播放三角
+                const appIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><rect width="512" height="512" rx="112" fill="#1c1c1e" /><path d="M150 240c0-60 40-100 106-100s106 40 106 100v110h-30V240c0-45-28-70-76-70s-76 25-76 70v110h-30V240z" fill="#ffffff" /><rect x="120" y="220" width="40" height="70" rx="10" fill="#ffffff" /><rect x="352" y="220" width="40" height="70" rx="10" fill="#ffffff" /><polygon points="230,225 300,260 230,295" fill="#ffffff" /></svg>`;
+                const iconBase64 = btoa(unescape(encodeURIComponent(appIconSVG)));
+                const iconDataURL = `data:image/svg+xml;base64,${iconBase64}`;
+
+                // iOS 苹果专用 Web Clip 独立图标
+                const appleIcon = document.createElement('link');
+                appleIcon.rel = 'apple-touch-icon';
+                appleIcon.href = iconDataURL;
+                document.head.appendChild(appleIcon);
+
+                // 备用 Favicon，防止原生缺失
+                const favicon = document.createElement('link');
+                favicon.rel = 'icon';
+                favicon.type = 'image/svg+xml';
+                favicon.href = iconDataURL;
+                document.head.appendChild(favicon);
+
+                // 动态注入 Web App Manifest 模拟
+                const manifestObj = {
+                    "name": appName,
+                    "short_name": appShortName,
+                    "start_url": window.location.href.split('#')[0], // 移除冗余状态锚点，锁定干净主入口
+                    "display": "standalone",
+                    "orientation": "portrait",
+                    "background_color": "#f4f4f7",
+                    "theme_color": "#1c1c1e",
+                    "icons": [
+                        {
+                            "src": iconDataURL,
+                            "sizes": "512x512",
+                            "type": "image/svg+xml",
+                            "purpose": "any maskable"
+                        }
+                    ]
+                };
+
+                const manifestStr = JSON.stringify(manifestObj);
+                const manifestDataURL = `data:application/json;base64,${btoa(unescape(encodeURIComponent(manifestStr)))}`;
+                
+                const manifestLink = document.createElement('link');
+                manifestLink.rel = 'manifest';
+                manifestLink.href = manifestDataURL;
+                document.head.appendChild(manifestLink);
+            } catch(e) {
+                console.error("PWA Manifest Init Error:", e);
+            }
+        })();
+
+        // ---------------- 1. 视图切换（带现场记忆功能） ----------------
+        let previousViewId = localStorage.getItem('theater_previous_view_id') || '';
+        let playMode = 'text'; // 'text' 或 'interactive' 两种玩法的核心状态
+
+        function switchView(viewId) {
+            document.getElementById('play-menu-dropdown').style.display = 'none';
+
+            const activeView = document.querySelector('.view.active');
+            const fromViewId = activeView ? activeView.id : '';
+
+            // 深度更新来源记录，保证子页面多跳转不丢失返回树
+            if (viewId === 'profile-edit-view' || viewId === 'profile-library-view' || viewId === 'saved-sessions-view' || viewId === 'prompt-library-view' || viewId === 'html-generator-view' || viewId === 'html-library-view') {
+                if (fromViewId && fromViewId !== 'profile-edit-view' && fromViewId !== 'profile-library-view' && fromViewId !== 'saved-sessions-view' && fromViewId !== 'prompt-library-view' && fromViewId !== 'html-generator-view' && fromViewId !== 'html-library-view') {
+                    previousViewId = fromViewId;
+                    localStorage.setItem('theater_previous_view_id', previousViewId);
+                }
+            }
+
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.remove('active');
+            });
+            const targetView = document.getElementById(viewId);
+            if (targetView) {
+                targetView.classList.add('active');
+
+                // 只有从 home 页面直接进入开启小剧场玩法时才弹出剧本选择框
+                if (viewId === 'play-view' && (fromViewId === 'home-view' || fromViewId === '')) {
+                    openPlayModeModal();
+                }
+            }
+            // 毫秒级写入 LocalStorage，用于被后台挂起刷新后的现场自愈恢复
+            localStorage.setItem('theater_active_view_id', viewId);
+        }
+
+        // 全新：强制浏览器全屏/退出全屏 API 控制
+        function toggleBrowserFullscreen() {
+            const btn = document.getElementById('fullscreen-btn');
+            const isFullscreen = document.fullscreenElement || 
+                                 document.webkitFullscreenElement || 
+                                 document.mozFullScreenElement || 
+                                 document.msFullscreenElement;
+
+            if (!isFullscreen) {
+                const docEl = document.documentElement;
+                if (docEl.requestFullscreen) {
+                    docEl.requestFullscreen();
+                } else if (docEl.webkitRequestFullscreen) { /* Safari / iOS */
+                    docEl.webkitRequestFullscreen();
+                } else if (docEl.mozRequestFullScreen) {
+                    docEl.mozRequestFullScreen();
+                } else if (docEl.msRequestFullscreen) {
+                    docEl.msRequestFullscreen();
+                }
+                btn.innerText = "退出全屏";
+                btn.classList.remove('primary');
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                btn.innerText = "点击全屏";
+                btn.classList.add('primary');
+            }
+        }
+
+        // 监听并同步原生全屏手势退出动作
+        function syncFullscreenButtonState() {
+            const btn = document.getElementById('fullscreen-btn');
+            if (!btn) return;
+            const isFullscreen = document.fullscreenElement || 
+                                 document.webkitFullscreenElement || 
+                                 document.mozFullScreenElement || 
+                                 document.msFullscreenElement;
+            if (isFullscreen) {
+                btn.innerText = "退出全屏";
+                btn.classList.remove('primary');
+            } else {
+                btn.innerText = "点击全屏";
+                btn.classList.add('primary');
+            }
+        }
+        document.addEventListener('fullscreenchange', syncFullscreenButtonState);
+        document.addEventListener('webkitfullscreenchange', syncFullscreenButtonState);
+        document.addEventListener('mozfullscreenchange', syncFullscreenButtonState);
+        document.addEventListener('MSFullscreenChange', syncFullscreenButtonState);
+
+        // ---------------- 2. 日夜间主题切换 ----------------
+        function toggleTheme() {
+            const root = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            root.classList.toggle('dark-mode');
+
+            // 获取主题色彩元标记
+            const themeMeta = document.getElementById('theme-color-meta');
+
+            if (root.classList.contains('dark-mode')) {
+                if (themeMeta) themeMeta.setAttribute('content', '#09090b');
+                icon.innerHTML = `
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                `;
+            } else {
+                if (themeMeta) themeMeta.setAttribute('content', '#f4f4f7');
+                icon.innerHTML = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>`;
+            }
+            // 模式切换时自动更新全局壁纸暗度 
+            updateWallpaperFilters();
+        }
+
+        // ---------------- 3. 本机状态同步 ----------------
+        function updateStatusTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('status-time').innerText = `${hours}:${minutes}`;
+        }
+
+        function updateNetworkStatus() {
+            const netType = document.getElementById('network-type');
+            const netSignal = document.getElementById('network-signal-icon');
+            
+            if (navigator.onLine) {
+                netType.innerText = "5G";
+                netSignal.style.opacity = "1";
+            } else {
+                netType.innerText = "SOS";
+                netSignal.style.opacity = "0.25"; 
+            }
+        }
+
+        function initBatteryStatus() {
+            if (navigator.getBattery) {
+                navigator.getBattery().then(function(battery) {
+                    function updateAllBatteryDetails() {
+                        const level = Math.round(battery.level * 100);
+                        const isCharging = battery.charging;
+
+                        document.getElementById('battery-text').innerText = `${level}%`;
+                        document.getElementById('battery-fill').style.width = `${level}%`;
+
+                        const bolt = document.getElementById('battery-charging-bolt');
+                        if (isCharging) {
+                            bolt.style.display = 'inline-block';
+                        } else {
+                            bolt.style.display = 'none';
+                        }
+                    }
+
+                    updateAllBatteryDetails();
+                    battery.addEventListener('levelchange', updateAllBatteryDetails);
+                    battery.addEventListener('chargingchange', updateAllBatteryDetails);
+                });
+            } else {
+                document.getElementById('battery-text').innerText = '100%';
+                document.getElementById('battery-fill').style.width = '100%';
+                document.getElementById('battery-charging-bolt').style.display = 'none';
+            }
+        }
+
+        // ---------------- 4. 简易通知 ----------------
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // ---------------- 5. 开启小剧场核心逻辑 ----------------
+        function openPlayModeModal() {
+            document.getElementById('play-mode-modal').classList.add('active');
+        }
+        function closePlayModeModal() {
+            document.getElementById('play-mode-modal').classList.remove('active');
+        }
+
+        // 双轨玩法模式选择，支持互通人设和保存库 
+        function selectPlayMode(mode) {
+            closePlayModeModal();
+            playMode = mode;
+            const badge = document.getElementById('play-mode-badge');
+            if (mode === 'text') {
+                badge.innerText = '纯文本';
+                showToast('已进入：纯文本小剧场空间');
+            } else if (mode === 'interactive') {
+                badge.innerText = '可交互';
+                showToast('已进入：互动 HTML 小剧场空间 ✨');
+            }
+        }
+
+        function toggleAccordion(id) {
+            const content = document.getElementById(id);
+            const icon = document.getElementById(id + '-icon');
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.innerText = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.innerText = '▼';
+            }
+        }
+
+        function clearPlayInput() {
+            document.getElementById('play-input').value = '';
+            showToast('输入框内容已清除');
+        }
+
+        // ---------------- 6. 模型列表与配置 ----------------
+        let localModels = [];
+        let selectedModelId = "";
+
+        async function fetchModels() {
+            const apiUrl = document.getElementById('api-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!apiUrl || !apiKey) {
+                showToast('请完整输入 API URL 和 Key 再进行拉取！');
+                return;
+            }
+
+            const spinner = document.getElementById('loading-spinner');
+            const btnText = document.getElementById('btn-text');
+
+            spinner.style.display = 'inline-block';
+            btnText.innerText = '正在拉取模型中...';
+
+            // 1. 自动过滤用户可能误输入的 /chat/completions 路径
+            let cleanUrl = apiUrl.replace(/\/chat\/completions\/?$/, '');
+            let endpoint = cleanUrl;
+            if (!endpoint.endsWith('/models') && !endpoint.endsWith('/models/')) {
+                endpoint = endpoint.replace(/\/$/, '') + '/models';
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`网络响应异常 (HTTP ${response.status})`);
+                }
+
+                const data = await response.json();
+                let list = [];
+
+                // 2. 兼容性解析算法：自适应 OpenAI, DeepSeek, OpenRouter, Ollama 等各平台的返回格式
+                if (data && Array.isArray(data)) {
+                    list = data.map(m => typeof m === 'string' ? m : (m.id || m.model || m.name));
+                } else if (data && Array.isArray(data.data)) {
+                    list = data.data.map(m => typeof m === 'string' ? m : (m.id || m.model || m.name));
+                } else if (data && Array.isArray(data.models)) {
+                    list = data.models.map(m => typeof m === 'string' ? m : (m.name || m.id || m.model));
+                } else if (data && typeof data === 'object') {
+                    // 兜底逻辑：尝试提取对象中第一个数组属性进行解析
+                    const firstArray = Object.values(data).find(val => Array.isArray(val));
+                    if (firstArray) {
+                        list = firstArray.map(m => typeof m === 'string' ? m : (m.id || m.model || m.name));
+                    }
+                }
+
+                if (list && list.length > 0) {
+                    localModels = list;
+                    localStorage.setItem('theater_model_list', JSON.stringify(localModels));
+                    renderModelList(localModels);
+                    showToast(`拉取成功！共加载 ${localModels.length} 个模型`);
+                } else {
+                    showToast('接口格式不匹配或未找到有效模型。您可以尝试更换通道。');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast(`连接失败: ${error.message}。若非地址错误，通常是浏览器或WebView跨域(CORS)拦截限制。`);
+            } finally {
+                spinner.style.display = 'none';
+                btnText.innerText = '拉取服务模型列表';
+            }
+        }
+
+        function renderModelList(models) {
+            const listDiv = document.getElementById('model-list');
+            if (models.length === 0) {
+                listDiv.innerHTML = `<div class="placeholder-text">暂无已拉取的模型</div>`;
+                return;
+            }
+
+            listDiv.innerHTML = '';
+            models.forEach(modelId => {
+                const item = document.createElement('div');
+                item.className = `model-item ${modelId === selectedModelId ? 'selected' : ''}`;
+                item.innerText = modelId;
+                item.onclick = () => {
+                    selectedModelId = modelId;
+                    renderModelList(models);
+                };
+                listDiv.appendChild(item);
+            });
+        }
+
+        function saveConfiguration() {
+            const apiUrl = document.getElementById('api-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!apiUrl || !apiKey) {
+                showToast('请确保 API URL 与密钥填写完整！');
+                return;
+            }
+            if (!selectedModelId) {
+                showToast('请点击选中下方的服务模型后再点击保存！');
+                return;
+            }
+
+            localStorage.setItem('theater_api_url', apiUrl);
+            localStorage.setItem('theater_api_key', apiKey);
+            localStorage.setItem('theater_selected_model', selectedModelId);
+
+            showToast('通道与模型配置均已保存！');
+            switchView('home-view');
+        }
+
+        function savePlayInput() {
+            const text = document.getElementById('play-input').value;
+            localStorage.setItem('theater_temp_input', text);
+            showToast('内容已临时暂存');
+        }
+
+        function openSaveNameModal() {
+            const text = document.getElementById('play-input').value.trim();
+            if (!text) {
+                showToast('当前输入框为空，无法保存');
+                return;
+            }
+            document.getElementById('save-name-modal').classList.add('active');
+        }
+
+        function closeSaveNameModal() {
+            document.getElementById('save-name-modal').classList.remove('active');
+            document.getElementById('new-theater-name').value = '';
+        }
+
+        function confirmSaveTheater() {
+            const name = document.getElementById('new-theater-name').value.trim();
+            if (!name) {
+                showToast('请输入名称');
+                return;
+            }
+            const text = document.getElementById('play-input').value.trim();
+
+            let saved = [];
+            try {
+                saved = JSON.parse(localStorage.getItem('theater_saved_scenarios') || '[]');
+            } catch(e) {
+                saved = [];
+            }
+
+            saved.push({ name: name, content: text });
+            localStorage.setItem('theater_saved_scenarios', JSON.stringify(saved));
+
+            renderSavedTheaters();
+            closeSaveNameModal();
+            showToast(`成功保存指令为: ${name}`);
+        }
+
+        let selectedSavedIndex = -1;
+        function renderSavedTheaters() {
+            const container = document.getElementById('saved-theater-list');
+            let saved = [];
+            try {
+                saved = JSON.parse(localStorage.getItem('theater_saved_scenarios') || '[]');
+            } catch(e) {
+                saved = [];
+            }
+
+            if (saved.length === 0) {
+                container.innerHTML = '<div class="placeholder-text" style="padding: 10px;">暂无已保存的指令</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            saved.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = `model-item ${index === selectedSavedIndex ? 'selected' : ''}`;
+                div.style.padding = '8px 12px';
+                div.style.fontSize = '12px';
+                div.innerText = item.name;
+                div.onclick = () => {
+                    selectedSavedIndex = index;
+                    renderSavedTheaters();
+                };
+                container.appendChild(div);
+            });
+        }
+
+        function importSelectedTheater() {
+            if (selectedSavedIndex === -1) {
+                showToast('请选择一个需要导入的指令');
+                return;
+            }
+            let saved = [];
+            try {
+                saved = JSON.parse(localStorage.getItem('theater_saved_scenarios') || '[]');
+            } catch(e) {}
+
+            if (saved[selectedSavedIndex]) {
+                document.getElementById('play-input').value = saved[selectedSavedIndex].content;
+                showToast(`已成功替换载入: ${saved[selectedSavedIndex].name}`);
+            }
+        }
+
+        let selectedGenIndex = -1;
+        function renderGeneratorPrompts() {
+            const container = document.getElementById('generator-prompt-list');
+            let prompts = [];
+            try {
+                prompts = JSON.parse(localStorage.getItem('theater_generated_prompts') || '[]');
+            } catch(e) {
+                prompts = [];
+            }
+
+            if (prompts.length === 0) {
+                prompts = [
+                    {
+                        name: "吸血鬼小剧场－by随安",
+                        content: `$为我生成番外，标题自拟。内容为：[吸血鬼AU。user是活了漫长岁月s的上位者，char是刚被user初拥的新生儿。故事从转化后的前几天写起。char正在经历身体的剧变：心跳停滞、失去味觉、对光线极度敏感。在这段寂静的适应期里，写出char是如何面对这具不再属于人类的躯体，以及他看向赋予他这一切的创造者（user）时，眼神里暗藏的复杂情绪。两人在同一个空间里的相处，保持着一种微妙而危险的平衡。\n\n到了第七天，初拥的排异期（发热期）毫无预兆地降临。char的体温开始反常地滚烫，骨骼深处传来难耐的酸痛，更致命的是，他对user的血液和气息产生了本能的、几乎要摧毁理智的饥渴。写出他在发热初期的真实状态，以及他试图在user面前掩饰这种失控的隐忍与狼狈。\n\n然而，当user带着创造者独有的冰冷气息靠近时，char苦苦支撑的防线彻底崩溃。随后的NSFW互动，请抛弃直白的肉欲，将暧昧与危险的张力推到极致：发热的躯体本能地向着冰冷的源头靠近，进食的渴望与情欲的界限在喘息中彻底模糊。user作为上位者，面对这只失控新生儿，是带着怎样的游刃有余去回应？尖牙擦过皮肤的刺痛，绝对血脉压制下的生理性臣服，以及不同体温交缠时的黏腻感。用呼吸的错乱、光影的摇晃和皮肤的触感来填满整个空间。必须一次性连贯输出所有正文且不少于8000字、绝对遵守人设禁OOC]`
+                    }
+                ];
+                localStorage.setItem('theater_generated_prompts', JSON.stringify(prompts));
+            }
+
+            container.innerHTML = '';
+            prompts.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = `model-item ${index === selectedGenIndex ? 'selected' : ''}`;
+                div.style.padding = '8px 12px';
+                div.style.fontSize = '12px';
+                div.innerText = item.name;
+                div.onclick = () => {
+                    selectedGenIndex = index;
+                    renderGeneratorPrompts();
+                };
+                container.appendChild(div);
+            });
+        }
+
+        function importSelectedGeneratorPrompt() {
+            if (selectedGenIndex === -1) {
+                showToast('请在下方高级列表中选中一个指令设定');
+                return;
+            }
+            let prompts = [];
+            try {
+                prompts = JSON.parse(localStorage.getItem('theater_generated_prompts') || '[]');
+            } catch(e) {}
+
+            if (prompts[selectedGenIndex]) {
+                document.getElementById('play-input').value = prompts[selectedGenIndex].content;
+                showToast(`已导入设定: ${prompts[selectedGenIndex].name}`);
+            }
+        }
+
+        // ---------------- 7. 功能菜单与小说框 ----------------
+        function togglePlayMenu() {
+            const dropdown = document.getElementById('play-menu-dropdown');
+            if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+                dropdown.style.display = 'block';
+            } else {
+                dropdown.style.display = 'none';
+            }
+        }
+
+        // ---------------- 8. 人设卡配置管理 (Char / User) ----------------
+        let currentProfileType = 'char'; 
+        let currentUploadedAvatarBase64 = ''; 
+
+        function openProfileView(type) {
+            currentProfileType = type;
+            document.getElementById('play-menu-dropdown').style.display = 'none';
+            switchView('profile-edit-view');
+
+            const title = type === 'char' ? '配置 Char 人设卡' : '配置 User 人设卡';
+            document.getElementById('profile-edit-title').innerText = title;
+            document.getElementById('profile-name-label').innerText = type === 'char' ? 'Char 名字' : 'User 名字';
+            
+            document.getElementById('profile-name-input').value = '';
+            document.getElementById('profile-desc-input').value = '';
+            currentUploadedAvatarBase64 = '';
+            document.getElementById('profile-avatar-preview').style.display = 'none';
+            document.getElementById('profile-avatar-placeholder').style.display = 'block';
+        }
+
+        function triggerAvatarUpload() {
+            document.getElementById('avatar-file-input').click();
+        }
+
+        // 头像无损微缩 Canvas 压缩 
+        function handleAvatarFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const max_size = 120; 
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > max_size) {
+                                height *= max_size / width;
+                                width = max_size;
+                            }
+                        } else {
+                            if (height > max_size) {
+                                width *= max_size / height;
+                                height = max_size;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        currentUploadedAvatarBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                        const preview = document.getElementById('profile-avatar-preview');
+                        preview.src = currentUploadedAvatarBase64;
+                        preview.style.display = 'block';
+                        document.getElementById('profile-avatar-placeholder').style.display = 'none';
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function triggerProfileImport() {
+            const warningClosed = localStorage.getItem('theater_warning_closed');
+            if (warningClosed !== 'true') {
+                openWarningModal();
+            } else {
+                document.getElementById('profile-import-input').click();
+            }
+        }
+
+        function openWarningModal() {
+            const modal = document.getElementById('warning-modal');
+            const confirmBtn = document.getElementById('warning-confirm-btn');
+            modal.classList.add('active');
+
+            let countdown = 3;
+            confirmBtn.innerText = `确认 (${countdown}s)`;
+            confirmBtn.disabled = true;
+
+            const timer = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    confirmBtn.innerText = `确认 (${countdown}s)`;
+                } else {
+                    clearInterval(timer);
+                    confirmBtn.innerText = `确认`;
+                    confirmBtn.disabled = false;
+                }
+            }, 1000);
+        }
+
+        function dismissWarningPermanently() {
+            localStorage.setItem('theater_warning_closed', 'true');
+            document.getElementById('warning-modal').classList.remove('active');
+            document.getElementById('profile-import-input').click();
+        }
+
+        // 原生精准解析 TXT/DOCX 以及 JSON 酒馆卡 
+        function handleProfileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const extension = file.name.split('.').pop().toLowerCase();
+            const reader = new FileReader();
+
+            if (extension === 'json') {
+                // ---- 酒馆卡/JSON原生提取器  ----
+                reader.onload = function(e) {
+                    try {
+                        const json = JSON.parse(e.target.result);
+                        // 自适应酒馆卡 V1 / V2 通用结构解析 
+                        const charData = json.data || json;
+                        
+                        const name = charData.name || charData.char_name || "";
+                        const description = charData.description || "";
+                        const personality = charData.personality || "";
+                        const scenario = charData.scenario || "";
+                        const firstMes = charData.first_mes || charData.first_message || "";
+
+                        if (name) {
+                            document.getElementById('profile-name-input').value = name;
+                        }
+
+                        // 智慧重构，将酒馆卡全部细节设定转换为干净文本 
+                        let combinedDesc = "";
+                        if (description) combinedDesc += `【详细人设】\n${description}\n\n`;
+                        if (personality) combinedDesc += `【性格设定】\n${personality}\n\n`;
+                        if (scenario) combinedDesc += `【背景/剧情场景】\n${scenario}\n\n`;
+                        if (firstMes) combinedDesc += `【开场白】\n${firstMes}\n`;
+
+                        document.getElementById('profile-desc-input').value = combinedDesc.trim();
+
+                        // 提取酒馆嵌入式 Base64 头像并优化压缩
+                        const avatarBase = charData.avatar || charData.image || "";
+                        if (avatarBase && avatarBase.startsWith('data:image')) {
+                            // 调用图片自适应处理器压缩，防溢出
+                            const imgTemp = new Image();
+                            imgTemplate.onload = function() {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = 120;
+                                canvas.height = 120;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(imgTemp, 0, 0, 120, 120);
+                                currentUploadedAvatarBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                                const preview = document.getElementById('profile-avatar-preview');
+                                preview.src = currentUploadedAvatarBase64;
+                                preview.style.display = 'block';
+                                document.getElementById('profile-avatar-placeholder').style.display = 'none';
+                            };
+                            imgTemplate.src = avatarBase;
+                        }
+
+                        showToast(`酒馆人设卡 [${name || "未命名"}] 解析恢复成功！`);
+                    } catch(err) {
+                        console.error(err);
+                        showToast('酒馆卡解析失败！请检查文件格式。');
+                    }
+                };
+                reader.readAsText(file);
+            } else if (extension === 'docx') {
+                reader.onload = function(e) {
+                    const arrayBuffer = e.target.result;
+                    if (typeof mammoth !== 'undefined') {
+                        mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                            .then(function(result) {
+                                document.getElementById('profile-desc-input').value = result.value;
+                                showToast('Word人设文档内容已成功提取并导入！');
+                            })
+                            .catch(function(err) {
+                                console.error(err);
+                                showToast('DOCX 文件解析失败，建议转为 TXT 导入！');
+                            });
+                    } else {
+                        showToast('正在加载 Word 解析模块，请稍候再试...');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                reader.onload = function(e) {
+                    document.getElementById('profile-desc-input').value = e.target.result;
+                    showToast('人设内容文本已成功导入！');
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // 用于处理图片中介
+        const imgTemplate = new Image();
+
+        // 保存人设卡
+        function saveProfileCard() {
+            const name = document.getElementById('profile-name-input').value.trim();
+            const desc = document.getElementById('profile-desc-input').value.trim();
+
+            if (!name) {
+                showToast('保存失败，请填写角色卡名字！');
+                return;
+            }
+
+            const storageKey = currentProfileType === 'char' ? 'theater_char_cards' : 'theater_user_cards';
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            } catch(e) {
+                list = [];
+            }
+
+            const newCard = {
+                id: 'card_' + Date.now(),
+                name: name,
+                avatar: currentUploadedAvatarBase64,
+                desc: desc
+            };
+
+            list.push(newCard);
+            
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(list));
+                showToast(`人设角色卡 [${name}] 保存成功！`);
+                switchView('play-view');
+            } catch(error) {
+                console.error(error);
+                showToast('存储失败！数据空间受限，请更换更小头像。');
+            }
+        }
+
+        // ---------------- 10. 角色卡库 (小箱子机制) ----------------
+        let isMultiSelectMode = false;
+        let selectedCardsForDelete = [];
+
+        function openProfileLibrary() {
+            switchView('profile-library-view');
+            const title = currentProfileType === 'char' ? 'Char 人设库' : 'User 人设库';
+            document.getElementById('profile-library-title').innerText = title;
+            isMultiSelectMode = false;
+            selectedCardsForDelete = [];
+            document.getElementById('library-delete-btn').style.display = 'none';
+            document.getElementById('multiselect-toggle-btn').innerText = '多选';
+            renderLibraryGrid();
+        }
+
+        function closeProfileLibrary() {
+            if (previousViewId) {
+                switchView(previousViewId);
+            } else {
+                switchView('profile-edit-view');
+            }
+        }
+
+        function renderLibraryGrid() {
+            const container = document.getElementById('profile-grid-list');
+            const storageKey = currentProfileType === 'char' ? 'theater_char_cards' : 'theater_user_cards';
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            } catch(e) {
+                list = [];
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = '<div class="placeholder-text" style="grid-column: span 5;">暂无本地角色卡。</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            list.forEach(card => {
+                const cardDiv = document.createElement('div');
+                const isSelected = selectedCardsForDelete.includes(card.id);
+                cardDiv.className = `profile-card ${isSelected ? 'selected-delete' : ''}`;
+                cardDiv.onclick = () => handleCardClick(card);
+
+                let avatarHTML = '';
+                if (card.avatar) {
+                    avatarHTML = `<div class="profile-card-img-wrapper"><img src="${card.avatar}"></div>`;
+                } else {
+                    avatarHTML = `<div class="profile-card-img-wrapper" style="font-size:10px; color:var(--text-secondary); text-align:center;">暂无头像</div>`;
+                }
+
+                cardDiv.innerHTML = `
+                    ${avatarHTML}
+                    <div class="profile-card-name">${card.name}</div>
+                `;
+                container.appendChild(cardDiv);
+            });
+        }
+
+        function handleCardClick(card) {
+            if (isMultiSelectMode) {
+                if (selectedCardsForDelete.includes(card.id)) {
+                    selectedCardsForDelete = selectedCardsForDelete.filter(id => id !== card.id);
+                } else {
+                    selectedCardsForDelete.push(card.id);
+                }
+                renderLibraryGrid();
+            } else {
+                document.getElementById('profile-name-input').value = card.name;
+                document.getElementById('profile-desc-input').value = card.desc;
+                if (card.avatar) {
+                    currentUploadedAvatarBase64 = card.avatar;
+                    const preview = document.getElementById('profile-avatar-preview');
+                    preview.src = card.avatar;
+                    preview.style.display = 'block';
+                    document.getElementById('profile-avatar-placeholder').style.display = 'none';
+                } else {
+                    currentUploadedAvatarBase64 = '';
+                    document.getElementById('profile-avatar-preview').style.display = 'none';
+                    document.getElementById('profile-avatar-placeholder').style.display = 'block';
+                }
+                closeProfileLibrary();
+                showToast(`已载入: ${card.name}`);
+            }
+        }
+
+        // ---------------- 11. 恢复一键拷贝 100% 成功物理降级兼容机制 ----------------
+        function copyTextToClipboard(text) {
+            return new Promise((resolve, reject) => {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(resolve).catch(() => {
+                        fallbackCopy(text) ? resolve() : reject();
+                    });
+                } else {
+                    fallbackCopy(text) ? resolve() : reject();
+                }
+            });
+        }
+
+        function fallbackCopy(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            textArea.style.opacity = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            let successful = false;
+            try {
+                successful = document.execCommand('copy');
+            } catch (err) {
+                console.error("降级拷贝失败", err);
+            }
+            document.body.removeChild(textArea);
+            return successful;
+        }
+
+        function toggleMultiSelectMode() {
+            isMultiSelectMode = !isMultiSelectMode;
+            selectedCardsForDelete = [];
+            const toggleBtn = document.getElementById('multiselect-toggle-btn');
+            const deleteBtn = document.getElementById('library-delete-btn');
+
+            if (isMultiSelectMode) {
+                toggleBtn.innerText = '取消';
+                deleteBtn.style.display = 'block';
+            } else {
+                toggleBtn.innerText = '多选';
+                deleteBtn.style.display = 'none';
+            }
+            renderLibraryGrid();
+        }
+
+        function deleteSelectedProfiles() {
+            if (selectedCardsForDelete.length === 0) {
+                showToast('请先选中需要删除的角色卡');
+                return;
+            }
+
+            const storageKey = currentProfileType === 'char' ? 'theater_char_cards' : 'theater_user_cards';
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            } catch(e) {}
+
+            const updated = list.filter(card => !selectedCardsForDelete.includes(card.id));
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+            
+            selectedCardsForDelete = [];
+            renderLibraryGrid();
+            showToast('已批量删除选中的角色卡');
+        }
+
+        // ---------------- 12. 开启小剧场人称代词选择 ----------------
+        let charPronounType = '1'; 
+        let charPronounSubVal = '他'; 
+        let userPronounType = '1';
+        let userPronounSubVal = '他';
+
+        function setPronoun(type, val, element) {
+            const group = element.parentElement;
+            group.querySelectorAll('.pronoun-btn').forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+
+            const subContainer = document.getElementById(`${type}-pronoun-sub`);
+
+            if (type === 'char') {
+                charPronounType = val;
+                subContainer.style.display = (val === '3') ? 'flex' : 'none';
+            } else {
+                userPronounType = val;
+                subContainer.style.display = (val === '3') ? 'flex' : 'none';
+            }
+            localStorage.setItem(`theater_${type}_pronoun_type`, val);
+        }
+
+        function setPronounSub(type, val, element) {
+            const group = element.parentElement;
+            group.querySelectorAll('.pronoun-sub-btn').forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+
+            if (type === 'char') {
+                charPronounSubVal = val;
+            } else {
+                userPronounSubVal = val;
+            }
+            localStorage.setItem(`theater_${type}_pronoun_sub_val`, val);
+        }
+
+        function getFormattedPronoun(type) {
+            const pType = type === 'char' ? charPronounType : userPronounType;
+            const subVal = type === 'char' ? charPronounSubVal : userPronounSubVal;
+            if (pType === '1') return '第一人称“我”';
+            if (pType === '2') return '第二人称“你”';
+            if (pType === '3') return `第三人称“${subVal}”`;
+            return '第一人称';
+        }
+
+        // ---------------- 13. 开启小剧场角色卡绑定 ----------------
+        let activeBindType = 'char'; 
+        let boundCharCard = null; 
+        let boundUserCard = null; 
+
+        function triggerProfileBind(type) {
+            activeBindType = type;
+            const modal = document.getElementById('bind-profile-modal');
+            const title = document.getElementById('bind-modal-title');
+            title.innerText = type === 'char' ? '绑定 Char 角色卡' : '绑定 User 角色卡';
+
+            const storageKey = type === 'char' ? 'theater_char_cards' : 'theater_user_cards';
+            let list = [];
+            try {
+                list = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            } catch(e) {}
+
+            const modalList = document.getElementById('bind-modal-list');
+            if (list.length === 0) {
+                modalList.innerHTML = `<div class="placeholder-text">暂无角色卡，请点击右上角菜单配置人设卡！</div>`;
+            } else {
+                modalList.innerHTML = '';
+                list.forEach(card => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'model-item';
+                    
+                    let avatarHTML = '';
+                    if (card.avatar) {
+                        avatarHTML = `<img src="${card.avatar}" style="width:18px; height:18px; border-radius:50%; object-fit:cover; margin-right:8px;">`;
+                    }
+                    itemDiv.innerHTML = `<div style="display:flex; align-items:center;">${avatarHTML}<span>${card.name}</span></div>`;
+                    itemDiv.onclick = () => selectBindProfile(card);
+                    modalList.appendChild(itemDiv);
+                });
+            }
+            modal.classList.add('active');
+        }
+
+        function selectBindProfile(card) {
+            if (activeBindType === 'char') {
+                boundCharCard = card;
+                document.getElementById('bind-char-text').innerText = card.name;
+                const avatar = document.getElementById('bind-char-avatar');
+                if (card.avatar) {
+                    avatar.src = card.avatar;
+                    avatar.style.display = 'inline-block';
+                } else {
+                    avatar.style.display = 'none';
+                }
+                localStorage.setItem('bound_char_card', JSON.stringify(card));
+            } else {
+                boundUserCard = card;
+                document.getElementById('bind-user-text').innerText = card.name;
+                const avatar = document.getElementById('bind-user-avatar');
+                if (card.avatar) {
+                    avatar.src = card.avatar;
+                    avatar.style.display = 'inline-block';
+                } else {
+                    avatar.style.display = 'none';
+                }
+                localStorage.setItem('bound_user_card', JSON.stringify(card));
+            }
+            closeProfileBindModal();
+            showToast('绑定成功！');
+        }
+
+        function closeProfileBindModal() {
+            document.getElementById('bind-profile-modal').classList.remove('active');
+        }
+
+        function saveBreakConfig() {
+            const enabled = document.getElementById('break-enabled').checked;
+            const words = document.getElementById('break-words').value.trim();
+            localStorage.setItem('theater_break_enabled', enabled ? 'true' : 'false');
+            localStorage.setItem('theater_break_words', words);
+            showToast('破限配置已安全持久化');
+        }
+
+        // ---------------- 14. 极高性能双轨复制与物理隔离 Shadow DOM 画布引擎  ----------------
+        // 影子沙盒物理防御隔离：100% 杜绝 AI 生成的 HTML CSS 全局样式发生溢出渲染崩溃
+        // 重点增加自适应视口比例弹性微缩处理器，彻底攻克由于绝对宽度在移动端上超出的 Bug 
+        function renderSafeHTML(container, htmlCode) {
+            container.innerHTML = '';
+            
+            const host = document.createElement('div');
+            host.style.width = '100%';
+            host.style.height = 'auto';
+            host.style.display = 'block';
+            host.style.position = 'relative';
+            container.appendChild(host);
+            
+            const shadow = host.attachShadow({ mode: 'open' });
+            
+            const resetStyle = document.createElement('style');
+            resetStyle.textContent = `
+                :host {
+                    display: block;
+                    width: 100%;
+                    height: auto;
+                    overflow: hidden; /* 防止物理边缘生硬溢出 */
+                    pointer-events: auto !important;
+                }
+                .sandboxed-content {
+                    width: 100%;
+                    height: auto;
+                    box-sizing: border-box;
+                    transform-origin: top left;
+                    pointer-events: auto !important;
+                }
+                * {
+                    box-sizing: border-box;
+                    pointer-events: auto !important;
+                }
+            `;
+            shadow.appendChild(resetStyle);
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'sandboxed-content';
+            contentDiv.innerHTML = htmlCode;
+            shadow.appendChild(contentDiv);
+            
+            // 弹性视口物理微缩计算引擎 
+            setTimeout(() => {
+                const hostWidth = host.getBoundingClientRect().width || container.clientWidth || 350;
+                
+                // 临时重置比对尺寸，测出原生无损 HTML 的真实渲染宽 
+                contentDiv.style.transform = 'none';
+                contentDiv.style.width = 'max-content';
+                
+                let contentWidth = contentDiv.scrollWidth || 350;
+                
+                // 深度遍历子节点寻找可能硬编码 width: 400px 的越界溢出者 
+                const allElements = contentDiv.querySelectorAll('*');
+                allElements.forEach(el => {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width > contentWidth) {
+                        contentWidth = rect.width;
+                    }
+                });
+
+                // 若真实溢出，毫秒级无损等比例微缩，保障大弹窗及列表内部点击、滑动、撑伞、撕票据 100% 灵敏完美展示 
+                if (contentWidth > hostWidth && hostWidth > 0) {
+                    const scaleFactor = hostWidth / contentWidth;
+                    contentDiv.style.transform = `scale(${scaleFactor})`;
+                    contentDiv.style.width = `${contentWidth}px`; 
+                    
+                    // 高精补偿宿主高度，彻底消灭下方的大长空白
+                    const contentHeight = contentDiv.getBoundingClientRect().height * scaleFactor;
+                    host.style.height = `${contentHeight}px`;
+                } else {
+                    // 自适应普通还原 
+                    contentDiv.style.transform = 'none';
+                    contentDiv.style.width = '100%';
+                    host.style.height = 'auto';
+                }
+            }, 80);
+            
+            // 重新在影子局部树执行脚本激活运行
+            executeScripts(shadow);
+        }
+
+        // 沙盒级内联 script 重新装载激活器
+        function executeScripts(container) {
+            const scripts = container.querySelectorAll('script');
+            scripts.forEach(oldScript => {
+                const newScript = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(attr => {
+                    newScript.setAttribute(attr.name, attr.value);
+                });
+                newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
+        }
+
+        // HTML 转义防止源码展示解析成画布 
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag] || tag)
+            );
+        }
+
+        async function startAPIPlay() {
+            const inputText = document.getElementById('play-input').value.trim();
+            if (!inputText) {
+                showToast('请先输入或选择导入小剧场设定指令');
+                return;
+            }
+
+            if (!boundCharCard || !boundUserCard) {
+                showToast('生成失败！请先选择并绑定 Char 与 User 角色卡！');
+                return;
+            }
+
+            const apiUrl = localStorage.getItem('theater_api_url') || '';
+            const apiKey = localStorage.getItem('theater_api_key') || '';
+            const model = localStorage.getItem('theater_selected_model') || '';
+
+            if (!apiUrl || !apiKey || !model) {
+                showToast('请先在主页面“配置 API”应用中配置有效的连接参数');
+                return;
+            }
+
+            let endpoint = apiUrl;
+            if (!endpoint.endsWith('/chat/completions') && !endpoint.endsWith('/chat/completions/')) {
+                endpoint = endpoint.replace(/\/$/, '') + '/chat/completions';
+            }
+
+            const breakEnabled = document.getElementById('break-enabled').checked;
+            const breakWords = document.getElementById('break-words').value.trim();
+            const forbiddenDirections = document.getElementById('forbidden-directions').value.trim();
+            const isStream = document.querySelector('input[name="output-mode"]:checked').value === 'stream';
+
+            const spinner = document.getElementById('play-spinner');
+            const btn = document.getElementById('start-api-play-btn');
+
+            spinner.style.display = 'block';
+            btn.setAttribute('disabled', 'true');
+
+            const container = document.getElementById('play-output-container');
+            const thoughtContent = document.getElementById('thought-content');
+            const playContent = document.getElementById('play-output-content');
+
+            container.style.display = 'block';
+            currentGeneratedHTML = ''; 
+
+            renderStaticMindChain();
+            playContent.innerHTML = '小剧场正在全力构思并极速装载中...';
+
+            let systemPrompt = '';
+            
+            if (playMode === 'interactive') {
+                // ---- 1.3.1 精调可交互 HTML 小剧场 System Prompt ----
+                // 重点突破：100% 相对选择器安全规则以消除多地多重冲突，交互组件留在原文不隐藏 
+                systemPrompt = `你是一个拥有顶级前端交互设计和剧作表现力的生成大师。
+【背景卡配置】：
+1. Char 名字: ${boundCharCard.name}。详细人设: ${boundCharCard.desc}
+2. User 名字: ${boundUserCard.name}。详细人设: ${boundUserCard.desc}
+
+【人称代词选择限制】：
+- Char 角色在文本生成时必须使用代词：${getFormattedPronoun('char')}。
+- User 角色在文本生成时必须使用代词：${getFormattedPronoun('user')}。
+
+【控制指令与限制】：
+- 你的生成必须以用户的《小剧场设定指令》为绝对准则。
+${breakEnabled ? `- 破限参数：${breakWords}` : ''}
+${forbiddenDirections ? `- 绝对禁止生成的方向：${forbiddenDirections}` : ''}
+
+【高表现力可点击 HTML 剧作约束】：
+1. 剧情输出必须使用干净、美观的 HTML 格式包裹。
+2. 绝对禁止使用任何渐变（gradient）背景，只允许简约的黑、白、灰色调或扁平色系（如：border: 1px solid #e5e5e5; background: #fff; padding: 15px; color: #1c1c1e;）。
+3. 文字容器必须包含 "white-space: nowrap; text-overflow: ellipsis;" 等规则，绝对禁止标题或线索字标换行错误。
+4. 🌟【100% 相对选择器安全规则】：在编写任何 onclick 或交互 JavaScript 时，绝对禁止使用 document.getElementById('...') 选择器！因为该剧作可能在页面的历史记录库、大弹窗等不同容器中多次渲染，使用全局 ID 选择器会导致严重的点击冲突和交互失效！你必须使用基于 this 的相对选择机制（例如：this.nextElementSibling.style.display='block'; 或 this.parentNode.querySelector('.next-part').style.display='block'; 等）。
+5. 🌟【交互状态保留规则】：当用户点击交互组件（如聊天记录发送按钮、撕小票、撑雨伞、翻阅日记本等）触发下文时，这些交互组件自身绝对不能消失（不要使用 display:none 或 remove 隐藏它们）！组件必须保留在原文中，你可以通过改变它们自身的背景色（如变为浅灰）、按钮变为“已读/已发送/已开启”状态或显示打钩 ✅，来自然地融入剧情流。
+6. 🎨【你可以设计的创意交互组件】：
+   - 💬 聊天互动气泡：用户点击气泡右下角的发送按钮（发送完毕后按钮字样变为“已发送”且背景变灰），即可显现下方的回复消息。
+   - 🧾 账单小票/收据：点击后提示“小票已撕开”，显示虚线撕毁线，并解开下文剧情。
+   - 🌂 撑开雨伞：点击提示“伞已撑起（☔）”，并露出雨伞遮蔽下的密语。
+   - 📖 翻日记：点击后揭晓日记被覆盖的隐秘真心，日记框变灰且下文剧情开启。
+7. 所有标签样式及交互函数通过内联的 onclick 绑定。所有效果一次性完美生成完毕。`;
+            } else {
+                // ---- 纯文本模式 System Prompt ----
+                systemPrompt = `你是一个拥有顶尖剧作表现力和组件排版能力的生成大师。
+【背景卡配置】：
+1. Char 名字: ${boundCharCard.name}。详细人设: ${boundCharCard.desc}
+2. User 名字: ${boundUserCard.name}。详细人设: ${boundUserCard.desc}
+
+【人称代词选择限制】：
+- Char 角色在文本生成时必须使用代词：${getFormattedPronoun('char')}。
+- User 角色在文本生成时必须使用代词：${getFormattedPronoun('user')}。
+
+【控制指令与限制】：
+- 你的生成必须以用户的《小剧场设定指令》为绝对准则。
+${breakEnabled ? `- 破限参数：${breakWords}` : ''}
+${forbiddenDirections ? `- 绝对禁止生成的方向：${forbiddenDirections}` : ''}
+
+【小剧场 HTML 穿穿组件排版约束】：
+1. 剧场剧情输出必须使用干净、美观 of HTML 格式包裹。
+2. 绝对禁止使用任何带有渐变（gradient）的背景，只允许简约的黑、白、灰色调或低饱色系。
+3. 绝对禁止在生成标题、场景线索、分割线时发生字符垂直换行现象。文本分割容器必须在 style 中强制包含“white-space: nowrap; text-overflow: ellipsis;”等配置规则。
+4. 剧场表现不局限于纯文本，请根据实际场景与剧本作铺垫，穿插不同的特色黑白灰扁平风 UI 组件（例如聊天对话卡、通话卡、消费清单账单、事件定位备忘卡等，无交互纯展示即可）。
+
+【双阶段输出协议】：
+你在生成时必须分两个部分输出：
+第一阶段：在 <think> 标签内，详细思考并展示人设、禁止输出方向等要素。
+第二阶段：在 <think> 标签闭合后，直接输出最终的小剧场正文 HTML 格式代码（禁止包含任何渐变色）。`;
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: inputText }
+                        ],
+                        temperature: 0.7,
+                        stream: isStream
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`请求通信异常 (HTTP ${response.status})`);
+                }
+
+                if (isStream) {
+                    playContent.innerHTML = '';
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+                    let fullText = '';
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); 
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const jsonStr = line.slice(6).trim();
+                                if (jsonStr === '[DONE]') continue;
+                                try {
+                                    const parsed = JSON.parse(jsonStr);
+                                    const chunk = parsed.choices[0].delta.content || '';
+                                    fullText += chunk;
+                                    parseAndRenderOutput(fullText);
+                                } catch(e) {}
+                            }
+                        }
+                    }
+                    showToast('流式小剧场生成完成 ✨');
+                } else {
+                    const data = await response.json();
+                    let reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    if (!reply) {
+                        throw new Error('未获取到返回的内容数据');
+                    }
+                    parseAndRenderOutput(reply);
+                    showToast('小剧场已一次性生成完成 ✨');
+                }
+
+            } catch(error) {
+                console.error(error);
+                playContent.innerHTML = `<div style="color:var(--text-primary); font-size:12.5px; padding:10px;">获取生成剧本出错: ${error.message}</div>`;
+                showToast('通信调用异常，请重试');
+            } finally {
+                spinner.style.display = 'none';
+                btn.removeAttribute('disabled');
+            }
+        }
+
+        // 本地实时生成极简、极具高级感的诊断式思维链清单
+        function renderStaticMindChain() {
+            const thoughtContent = document.getElementById('thought-content');
+            
+            const breakEnabled = document.getElementById('break-enabled').checked;
+            const forbiddenDirections = document.getElementById('forbidden-directions').value.trim();
+            
+            const charPronounText = getFormattedPronoun('char');
+            const userPronounText = getFormattedPronoun('user');
+            
+            const charSuccess = boundCharCard ? "已读取成功 ✅" : "读取失败 ❌";
+            const userSuccess = boundUserCard ? "已读取成功 ✅" : "读取失败 ❌";
+            
+            let breakText = "未选择 ⚪";
+            if (breakEnabled) {
+                breakText = "读取成功 ✅";
+            }
+            
+            const forbiddenText = forbiddenDirections ? `[已提取禁止输出: ${forbiddenDirections}] ✅` : "无限制 ⚪";
+            
+            thoughtContent.innerHTML = `● 读取 char 人设：${charSuccess}\n● 读取 user 人设：${userSuccess}\n● 读取破限状态：${breakText}\n● 读取禁止输出方向：${forbiddenText}\n● 读取人称代词：已成功绑定 [Char: ${charPronounText}] & [User: ${userPronounText}] ✅\n───────────────────────────────────\n● 读取完毕，主剧场渲染装载中...`.trim();
+        }
+
+        function parseAndRenderOutput(rawText) {
+            const playContent = document.getElementById('play-output-content');
+
+            let playPart = '';
+            if (rawText.includes('<think>')) {
+                const parts = rawText.split('<think>');
+                const subParts = parts[1].split('</think>');
+                playPart = subParts[1] || '';
+            } else {
+                playPart = rawText;
+            }
+
+            let cleanHTML = playPart.trim();
+            if (cleanHTML.includes('```html')) {
+                cleanHTML = cleanHTML.split('```html')[1].split('```')[0].trim();
+            } else if (cleanHTML.includes('```')) {
+                cleanHTML = cleanHTML.split('```')[1].trim();
+            }
+
+            playContent.innerHTML = cleanHTML || '小剧场正文开始载入...';
+            currentGeneratedHTML = cleanHTML; 
+
+            // 执行沙盒 JS 解析激活逻辑，使互动 HTML 内部脚本立即生效
+            executeScripts(playContent);
+        }
+
+        function copyPlayOutput() {
+            const text = document.getElementById('play-output-content').innerText;
+            copyTextToClipboard(text).then(() => {
+                showToast('生成结果已成功拷贝至系统剪切板');
+            }).catch(() => {
+                showToast('拷贝失败，请手动选择文字进行复制');
+            });
+        }
+
+        // ---------------- 13. 剧作保存与音符展示库逻辑 ----------------
+        function openSaveSessionModal() {
+            if (!currentGeneratedHTML) {
+                showToast('暂无生成成功的剧作，无法保存');
+                return;
+            }
+            document.getElementById('save-session-modal').classList.add('active');
+        }
+
+        function closeSaveSessionModal() {
+            document.getElementById('save-session-modal').classList.remove('active');
+            document.getElementById('new-session-name').value = '';
+        }
+
+        function confirmSaveSession() {
+            const name = document.getElementById('new-session-name').value.trim();
+            if (!name) {
+                showToast('请输入保存名称');
+                return;
+            }
+
+            const charName = boundCharCard ? boundCharCard.name : '未绑定';
+            const userName = boundUserCard ? boundUserCard.name : '未绑定';
+
+            let sessions = [];
+            try {
+                sessions = JSON.parse(localStorage.getItem('theater_saved_sessions') || '[]');
+            } catch(e) {
+                sessions = [];
+            }
+
+            const newSession = {
+                id: 'sess_' + Date.now(),
+                name: name,
+                char: charName,
+                user: userName,
+                html: currentGeneratedHTML
+            };
+
+            sessions.push(newSession);
+            localStorage.setItem('theater_saved_sessions', JSON.stringify(sessions));
+
+            renderSavedSessions();
+            closeSaveSessionModal();
+            showToast(`已成功保存剧场: ${name}`);
+        }
+
+        function discardSession() {
+            currentGeneratedHTML = '';
+            document.getElementById('play-output-container').style.display = 'none';
+            showToast('已放弃保存本次小剧场');
+        }
+
+        function openSavedSessionsView() {
+            switchView('saved-sessions-view');
+            renderSavedSessions();
+        }
+
+        // 历史剧本卡片渲染：完美切入 Shadow DOM 样式隔离，防止泄露
+        function renderSavedSessions() {
+            const container = document.getElementById('sessions-container');
+            let sessions = [];
+            try {
+                sessions = JSON.parse(localStorage.getItem('theater_saved_sessions') || '[]');
+            } catch(e) {
+                sessions = [];
+            }
+
+            if (sessions.length === 0) {
+                container.innerHTML = '<div class="placeholder-text" style="padding: 24px;">暂无已保存的归档剧场。</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            sessions.forEach(sess => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'glass-panel';
+                itemDiv.style.padding = '16px';
+                itemDiv.style.marginBottom = '12px';
+
+                itemDiv.innerHTML = `
+                    <div class="accordion-header" onclick="toggleSessionAccordion('${sess.id}')">
+                        <span style="font-size: 14px; font-weight: 500;">${sess.name}</span>
+                        <span class="acc-icon" id="session-acc-icon-${sess.id}">▼</span>
+                    </div>
+                    <div id="session-acc-content-${sess.id}" class="accordion-content">
+                        <!-- 折叠预览区域 (采用 Shadow DOM 独立高透隔离沙盒) -->
+                        <div style="max-height: 200px; overflow: hidden; position: relative; border-bottom: 1px dashed var(--glass-border); padding-bottom: 8px; margin-bottom: 12px;">
+                            <div id="sess-lib-preview-${sess.id}"></div>
+                            <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 50px; background: linear-gradient(to bottom, transparent, var(--bg-color)); pointer-events: none;"></div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                            <span style="font-size: 11px; color: var(--text-secondary);">char: ${sess.char} &nbsp;&nbsp; user: ${sess.user}</span>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="mini-btn" onclick="deleteSavedSession('${sess.id}')">删除</button>
+                                <button class="mini-btn primary" onclick="viewFullSavedSession('${sess.id}')">查看完整</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+
+                // 影子隔离
+                const previewBox = itemDiv.querySelector(`#sess-lib-preview-${sess.id}`);
+                renderSafeHTML(previewBox, sess.html);
+            });
+        }
+
+        function toggleSessionAccordion(id) {
+            const content = document.getElementById(`session-acc-content-${id}`);
+            const icon = document.getElementById(`session-acc-icon-${id}`);
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.innerText = '▲';
+                // 激活折叠区中的互动 JS 运行 
+                const previewBox = content.querySelector(`div[id^="sess-lib-preview-"]`);
+                if (previewBox && previewBox.shadowRoot) {
+                    executeScripts(previewBox.shadowRoot);
+                }
+            } else {
+                content.style.display = 'none';
+                icon.innerText = '▼';
+            }
+        }
+
+        function deleteSavedSession(id) {
+            let sessions = [];
+            try {
+                sessions = JSON.parse(localStorage.getItem('theater_saved_sessions') || '[]');
+            } catch(e) {}
+
+            const updated = sessions.filter(s => s.id !== id);
+            localStorage.setItem('theater_saved_sessions', JSON.stringify(updated));
+            renderSavedSessions();
+            showToast('该小剧场已被删除');
+        }
+
+        // 大弹窗逻辑并唤醒影子隔离型脚本解析引擎 
+        let activeViewerSessionHtml = '';
+        function viewFullSavedSession(id) {
+            let sessions = [];
+            try {
+                sessions = JSON.parse(localStorage.getItem('theater_saved_sessions') || '[]');
+            } catch(e) {}
+
+            const session = sessions.find(s => s.id === id);
+            if (session) {
+                activeViewerSessionHtml = session.html;
+                document.getElementById('viewer-modal-title').innerText = session.name;
+
+                const body = document.getElementById('viewer-modal-body');
+                
+                // 影子独立沙盒渲染
+                renderSafeHTML(body, activeViewerSessionHtml);
+
+                currentViewerZoom = 14; 
+                body.style.fontSize = `${currentViewerZoom}px`;
+
+                document.getElementById('full-viewer-modal').classList.add('active');
+            }
+        }
+
+        function closeFullViewerModal() {
+            document.getElementById('full-viewer-modal').classList.remove('active');
+        }
+
+        function adjustZoom(amount) {
+            currentViewerZoom += amount;
+            if (currentViewerZoom < 10) currentViewerZoom = 10;
+            if (currentViewerZoom > 28) currentViewerZoom = 28;
+
+            const body = document.getElementById('viewer-modal-body');
+            body.style.fontSize = `${currentViewerZoom}px`;
+            
+            // 同步调整影子字号自适应
+            if (body.firstElementChild && body.firstElementChild.shadowRoot) {
+                const innerDiv = body.firstElementChild.shadowRoot.querySelector('div');
+                if (innerDiv) innerDiv.style.fontSize = `${currentViewerZoom}px`;
+            }
+        }
+
+        // ---------------- 14. 指令生成 APP 核心 API 生成与库管理  ----------------
+        function openPromptLibrary() {
+            switchView('prompt-library-view');
+            isPromptMultiSelectMode = false;
+            selectedPromptsForDelete = [];
+            document.getElementById('prompt-library-delete-btn').style.display = 'none';
+            document.getElementById('prompt-multiselect-toggle-btn').innerText = '多选';
+            renderPromptLibrary();
+        }
+
+        let isPromptMultiSelectMode = false;
+        let selectedPromptsForDelete = [];
+        let editingPromptId = ''; 
+
+        // 手风琴指令列表渲染 📝
+        function renderPromptLibrary() {
+            const container = document.getElementById('prompt-library-container');
+            let prompts = [];
+            try {
+                prompts = JSON.parse(localStorage.getItem('theater_generated_prompts') || '[]');
+            } catch(e) {
+                prompts = [];
+            }
+
+            if (prompts.length === 0) {
+                container.innerHTML = '<div class="placeholder-text" style="padding: 24px;">暂无已生成的指令内容。</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            prompts.forEach(p => {
+                const isSelected = selectedPromptsForDelete.includes(p.id);
+                const isEditing = editingPromptId === p.id;
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `glass-panel ${isSelected ? 'selected-delete' : ''}`;
+                itemDiv.style.padding = '16px';
+                itemDiv.style.marginBottom = '12px';
+                itemDiv.style.cursor = isPromptMultiSelectMode ? 'pointer' : 'default';
+
+                if (isPromptMultiSelectMode) {
+                    itemDiv.onclick = () => {
+                        if (selectedPromptsForDelete.includes(p.id)) {
+                            selectedPromptsForDelete = selectedPromptsForDelete.filter(id => id !== p.id);
+                        } else {
+                            selectedPromptsForDelete.push(p.id);
+                        }
+                        renderPromptLibrary();
+                    };
+                }
+
+                itemDiv.innerHTML = `
+                    <div class="accordion-header" style="cursor:pointer;" onclick="${isPromptMultiSelectMode ? '' : `togglePromptAccordion('${p.id}')`}">
+                        <span style="font-size: 14px; font-weight: 500;">${p.name}</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            ${isPromptMultiSelectMode ? '' : `<span class="mini-btn" style="padding: 2px 6px;" onclick="event.stopPropagation(); startEditPrompt('${p.id}')">📝</span>`}
+                            <span class="acc-icon" id="prompt-acc-icon-${p.id}">▼</span>
+                        </div>
+                    </div>
+                    <div id="prompt-acc-content-${p.id}" class="accordion-content">
+                        <div style="margin-top: 12px;">
+                            ${isEditing ? `
+                                <input type="text" id="edit-prompt-name-${p.id}" value="${p.name}" style="width:100%; margin-bottom:8px; padding:8px; background:var(--input-bg); border:1px solid var(--glass-border); border-radius:8px; color:var(--text-primary); font-size:13px;">
+                                <textarea id="edit-prompt-content-${p.id}" style="width:100%; height:120px; padding:8px; background:var(--input-bg); border:1px solid var(--glass-border); border-radius:8px; color:var(--text-primary); font-size:13px; resize:none;">${p.content}</textarea>
+                                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                                    <button class="mini-btn" onclick="cancelEditPrompt()">取消</button>
+                                    <button class="mini-btn primary" onclick="saveEditedPrompt('${p.id}')">保存</button>
+                                </div>
+                            ` : `
+                                <div style="font-size: 13px; background:var(--input-bg); padding:10px; border-radius:8px; border:1px solid var(--glass-border); white-space:pre-wrap; max-height:150px; overflow-y:auto; font-family:monospace;">${p.content}</div>
+                            `}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            });
+        }
+
+        function togglePromptAccordion(id) {
+            const content = document.getElementById(`prompt-acc-content-${id}`);
+            const icon = document.getElementById(`prompt-acc-icon-${id}`);
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.innerText = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.innerText = '▼';
+            }
+        }
+
+        function startEditPrompt(id) {
+            editingPromptId = id;
+            renderPromptLibrary();
+            const content = document.getElementById(`prompt-acc-content-${id}`);
+            const icon = document.getElementById(`prompt-acc-icon-${id}`);
+            if (content) {
+                content.style.display = 'block';
+                if (icon) icon.innerText = '▲';
+            }
+        }
+
+        function cancelEditPrompt() {
+            editingPromptId = '';
+            renderPromptLibrary();
+        }
+
+        function saveEditedPrompt(id) {
+            const newName = document.getElementById(`edit-prompt-name-${id}`).value.trim();
+            const newContent = document.getElementById(`edit-prompt-content-${id}`).value.trim();
+
+            if (!newName || !newContent) {
+                showToast('名称和内容不能为空！');
+                return;
+            }
+
+            let prompts = [];
+            try {
+                prompts = JSON.parse(localStorage.getItem('theater_generated_prompts') || '[]');
+            } catch(e) {}
+
+            const item = prompts.find(p => p.id === id);
+            if (item) {
+                item.name = newName;
+                item.content = newContent;
+            }
+
+            localStorage.setItem('theater_generated_prompts', JSON.stringify(prompts));
+            editingPromptId = '';
+            renderPromptLibrary();
+            renderGeneratorPrompts(); 
+            showToast('修改已成功保存');
+        }
+
+        function togglePromptMultiSelectMode() {
+            isPromptMultiSelectMode = !isPromptMultiSelectMode;
+            selectedPromptsForDelete = [];
+            const toggleBtn = document.getElementById('prompt-multiselect-toggle-btn');
+            const deleteBtn = document.getElementById('prompt-library-delete-btn');
+
+            if (isPromptMultiSelectMode) {
+                toggleBtn.innerText = '取消';
+                deleteBtn.style.display = 'block';
+            } else {
+                toggleBtn.innerText = '多选';
+                deleteBtn.style.display = 'none';
+            }
+            renderPromptLibrary();
+        }
+
+        function deleteSelectedPrompts() {
+            if (selectedPromptsForDelete.length === 0) {
+                showToast('请先选择要删除的指令');
+                return;
+            }
+
+            let prompts = [];
+            try {
+                prompts = JSON.parse(localStorage.getItem('theater_generated_prompts') || '[]');
+            } catch(e) {}
+
+            const updated = prompts.filter(p => !selectedPromptsForDelete.includes(p.id));
+            localStorage.setItem('theater_generated_prompts', JSON.stringify(updated));
+
+            selectedPromptsForDelete = [];
+            renderPromptLibrary();
+            renderGeneratorPrompts(); 
+            showToast('指令已批量删除');
+        }
+
+        async function startAPIPromptGen() {
+            const name = document.getElementById('prompt-name').value.trim();
+            const content = document.getElementById('prompt-input-content').value.trim();
+
+            if (!name) {
+                showToast('生成失败，请先填写小剧场指令名字。');
+                return;
+            }
+            if (!content) {
+                showToast('请先输入核心走向设定内容');
+                return;
+            }
+
+            const apiUrl = localStorage.getItem('theater_api_url') || '';
+            const apiKey = localStorage.getItem('theater_api_key') || '';
+            const model = localStorage.getItem('theater_selected_model') || '';
+
+            if (!apiUrl || !apiKey || !model) {
+                showToast('请先在主页面“配置 API”应用中配置有效的连接参数');
+                return;
+            }
+
+            let endpoint = apiUrl;
+            if (!endpoint.endsWith('/chat/completions') && !endpoint.endsWith('/chat/completions/')) {
+                endpoint = endpoint.replace(/\/$/, '') + '/chat/completions';
+            }
+
+            const isStream = document.querySelector('input[name="prompt-output-mode"]:checked').value === 'stream';
+            const breakEnabled = document.getElementById('prompt-break-enabled').checked;
+            const forbiddenDirections = document.getElementById('prompt-forbidden-directions').value.trim();
+
+            const spinner = document.getElementById('prompt-spinner');
+            const btn = document.getElementById('start-api-prompt-btn');
+
+            spinner.style.display = 'block';
+            btn.setAttribute('disabled', 'true');
+
+            const container = document.getElementById('prompt-output-container');
+            const thoughtContent = document.getElementById('prompt-thought-content');
+            const outputContent = document.getElementById('prompt-output-content');
+
+            container.style.display = 'block';
+            thoughtContent.innerText = '正在执行指令重构自省推导演算...';
+            outputContent.innerText = '正在生成优化版指令...';
+
+            const systemPrompt = `你是一个精通角色扮演与剧本设定指令指令梳理的大师。你必须严格遵守以下规则：
+1. 用户的输入内容可能是零散的剧本走向、设定、脑洞。你需要用更高级、细节拉满的方式，将其重新组织、丰富并翻译整理。
+2. ⚠️重点：在提到任何角色指代时，必须强行统一采用 "char" 和 "user" 两个代词！绝对禁止出现他/她/男/女等具体性别名词和第三人称代词（如：将“他是一个将军”改写为“char是一个将军”，“你靠近他”改写为“user靠近char”），以防止角色混淆。
+3. 自省分析：在 <think> 标签内进行思考，推导如何梳理人设走向，并在其外部只输出最后提炼出来的剧情核心描述内容。输出不包含任何多余的前后缀说明。`;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: content }
+                        ],
+                        temperature: 0.7,
+                        stream: isStream
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`请求通信异常 (HTTP ${response.status})`);
+                }
+
+                let fullText = '';
+                if (isStream) {
+                    thoughtContent.innerText = '';
+                    outputContent.innerText = '';
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); 
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const jsonStr = line.slice(6).trim();
+                                if (jsonStr === '[DONE]') continue;
+                                try {
+                                    const parsed = JSON.parse(jsonStr);
+                                    const chunk = parsed.choices[0].delta.content || '';
+                                    fullText += chunk;
+                                    parseAndRenderPrompt(fullText, name);
+                                } catch(e) {}
+                            }
+                        }
+                    }
+                } else {
+                    const data = await response.json();
+                    let reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    if (!reply) throw new Error('未获取到返回的内容数据');
+                    parseAndRenderPrompt(reply, name);
+                }
+
+                showToast('小剧场设定指令已生成，并自动归档宝箱库！');
+
+            } catch(error) {
+                console.error(error);
+                outputContent.innerText = `生成出错: ${error.message}`;
+                showToast('通信调用异常，请重试');
+            } finally {
+                spinner.style.display = 'none';
+                btn.removeAttribute('disabled');
+            }
+        }
+
+        function parseAndRenderPrompt(rawText, name) {
+            const thoughtContent = document.getElementById('prompt-thought-content');
+            const outputContent = document.getElementById('prompt-output-content');
+
+            let thoughtPart = '';
+            let playPart = '';
+
+            if (rawText.includes('<think>')) {
+                const parts = rawText.split('<think>');
+                const subParts = parts[1].split('</think>');
+                thoughtPart = subParts[0];
+                playPart = subParts[1] || '';
+            } else {
+                playPart = rawText;
+            }
+
+            let cleanText = playPart.trim();
+            if (cleanText.includes('```')) {
+                const parts = cleanText.split('```');
+                cleanText = parts[1] ? parts[1].replace(/^[a-zA-Z]+\n/, '') : parts[0];
+            }
+
+            const prefix = `$暂停当前剧情，为我生成番外小剧场，标题自拟。内容为：[`;
+            const suffix = `]全年龄尺度，锁定char/user视角。正文不需要分项。必须一次性连贯输出所有正文且不少于8000字、绝对遵守人设禁止OOC、独立时空不计入主线记忆、禁止message碎片化。`;
+            const finalPrompt = prefix + cleanText + suffix;
+
+            thoughtContent.innerText = thoughtPart.trim() || '指令推导演算中...';
+            outputContent.innerText = finalPrompt;
+
+            let saved = [];
+            try {
+                saved = JSON.parse(localStorage.getItem('theater_generated_prompts') || '[]');
+            } catch(e) {}
+            const existingIndex = saved.findIndex(p => p.name === name);
+            if (existingIndex !== -1) {
+                saved[existingIndex].content = finalPrompt;
+            } else {
+                saved.push({ id: 'p_' + Date.now(), name: name, content: finalPrompt });
+            }
+
+            localStorage.setItem('theater_generated_prompts', JSON.stringify(saved));
+            renderGeneratorPrompts(); 
+        }
+
+        function copyPromptOutput() {
+            const text = document.getElementById('prompt-output-content').innerText;
+            copyTextToClipboard(text).then(() => {
+                showToast('指令已成功复制到剪贴板！');
+            }).catch(() => {
+                showToast('复制失败，请手动选择复制');
+            });
+        }
+
+
+        // ---------------- 15. 独立 HTML 组件设计生成与保存归档书本逻辑 (可保存交互修改并纠正 Bug)  ----------------
+        let currentGeneratedHtmlCode = ''; 
+        let isHtmlGenEditMode = false; 
+
+        // 点击修改按钮切换为代码在线 textarea，按键映射毫秒追踪反馈至下文 
+        function toggleHtmlEditMode() {
+            const display = document.getElementById('html-gen-code-display');
+            const editor = document.getElementById('html-gen-code-editor');
+            const btn = document.getElementById('html-edit-btn');
+
+            isHtmlGenEditMode = !isHtmlGenEditMode;
+            if (isHtmlGenEditMode) {
+                editor.value = currentGeneratedHtmlCode;
+                display.style.display = 'none';
+                editor.style.display = 'block';
+                editor.focus();
+                btn.innerText = '确认修改';
+                btn.classList.add('primary');
+            } else {
+                currentGeneratedHtmlCode = editor.value;
+                display.innerText = currentGeneratedHtmlCode;
+                display.style.display = 'block';
+                editor.style.display = 'none';
+                btn.innerText = '修改';
+                btn.classList.remove('primary');
+
+                // 物理影子自适应再次渲染 
+                const preview = document.getElementById('html-gen-canvas-preview');
+                renderSafeHTML(preview, currentGeneratedHtmlCode);
+                showToast('已确认修改并同步映射至预览画布 ✨');
+            }
+        }
+
+        // Keystroke 毫秒渲染监听
+        function mirrorHtmlGenEditor() {
+            const editor = document.getElementById('html-gen-code-editor');
+            const preview = document.getElementById('html-gen-canvas-preview');
+            renderSafeHTML(preview, editor.value);
+        }
+
+        function openHtmlLibrary() {
+            switchView('html-library-view');
+            isHtmlMultiSelectMode = false;
+            selectedHtmlsForDelete = [];
+            document.getElementById('html-library-delete-btn').style.display = 'none';
+            document.getElementById('html-multiselect-toggle-btn').innerText = '多选';
+            renderHtmlLibrary();
+        }
+
+        let isHtmlMultiSelectMode = false;
+        let selectedHtmlsForDelete = [];
+        let editingHtmlCardId = ''; 
+
+        // 归档库手风琴卡片渲染，完美融入影子隔离沙盒
+        function renderHtmlLibrary() {
+            const container = document.getElementById('html-library-container');
+            let htmls = [];
+            try {
+                htmls = JSON.parse(localStorage.getItem('theater_saved_htmls') || '[]');
+            } catch(e) {
+                htmls = [];
+            }
+
+            if (htmls.length === 0) {
+                container.innerHTML = '<div class="placeholder-text" style="padding: 24px;">暂无已保存的 HTML 交互组件。</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            htmls.forEach(item => {
+                const isSelected = selectedHtmlsForDelete.includes(item.id);
+                const isEditing = editingHtmlCardId === item.id;
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = `glass-panel ${isSelected ? 'selected-delete' : ''}`;
+                itemDiv.style.padding = '16px';
+                itemDiv.style.marginBottom = '12px';
+                itemDiv.style.cursor = isHtmlMultiSelectMode ? 'pointer' : 'default';
+
+                if (isHtmlMultiSelectMode) {
+                    itemDiv.onclick = () => {
+                        if (selectedHtmlsForDelete.includes(item.id)) {
+                            selectedHtmlsForDelete = selectedHtmlsForDelete.filter(id => id !== item.id);
+                        } else {
+                            selectedHtmlsForDelete.push(item.id);
+                        }
+                        renderHtmlLibrary();
+                    };
+                }
+
+                itemDiv.innerHTML = `
+                    <div class="accordion-header" style="cursor:pointer;" onclick="${isHtmlMultiSelectMode ? '' : `toggleHtmlAccordion('${item.id}')`}">
+                        <span style="font-size: 14px; font-weight: 500;">${item.name}</span>
+                        <span class="acc-icon" id="html-acc-icon-${item.id}">▼</span>
+                    </div>
+                    <div id="html-acc-content-${item.id}" class="accordion-content">
+                        <!-- 代码展示(物理折叠50%) -->
+                        <div style="max-height: 120px; overflow: hidden; position: relative; border-bottom: 1px dashed var(--glass-border); padding-bottom: 8px; margin-bottom: 12px;">
+                            ${isEditing ? `
+                                <textarea id="edit-html-code-${item.id}" oninput="mirrorLibraryHtmlEdit('${item.id}')" style="width:100%; height:150px; font-family:monospace; font-size:12px; padding:10px; background:var(--input-bg); border:1px solid var(--glass-border); border-radius:8px; color:var(--text-primary); outline:none; resize:vertical;">${item.html}</textarea>
+                            ` : `
+                                <div style="font-family: monospace; font-size:11px; white-space:pre-wrap; word-break:break-all;">${escapeHTML(item.html)}</div>
+                            `}
+                            <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 40px; background: linear-gradient(to bottom, transparent, var(--bg-color)); pointer-events: none;"></div>
+                        </div>
+                        <!-- Canvas 实时效果渲染 (无任何JS，纯CSS驱动，弹性自适应高度)  -->
+                        <div id="html-lib-preview-${item.id}" style="border: 1px solid var(--glass-border); padding: 12px; border-radius: 8px; background: var(--glass-bg); margin-bottom: 12px; height: auto; min-height: 40px; overflow: visible;">
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:8px;">
+                            ${isHtmlMultiSelectMode ? '' : `
+                                <button class="mini-btn" onclick="copyLibraryHtmlCode('${item.id}')">复制代码</button>
+                                ${isEditing ? `
+                                    <button class="mini-btn" onclick="cancelEditHtmlCard()">取消</button>
+                                    <button class="mini-btn primary" onclick="saveEditedHtmlCard('${item.id}')">保存修改</button>
+                                ` : `
+                                    <button class="mini-btn" onclick="startEditHtmlCard('${item.id}')">修改</button>
+                                `}
+                            `}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+
+                // 影子物理安全隔离渲染
+                const previewBox = itemDiv.querySelector(`#html-lib-preview-${item.id}`);
+                renderSafeHTML(previewBox, item.html);
+            });
+        }
+
+        function toggleHtmlAccordion(id) {
+            const content = document.getElementById(`html-acc-content-${id}`);
+            const icon = document.getElementById(`html-acc-icon-${id}`);
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.innerText = '▲';
+                // 激活折叠区中的互动 JS 运行 
+                const previewBox = content.querySelector(`div[id^="html-lib-preview-"]`);
+                if (previewBox && previewBox.shadowRoot) {
+                    executeScripts(previewBox.shadowRoot);
+                }
+            } else {
+                content.style.display = 'none';
+                icon.innerText = '▼';
+            }
+        }
+
+        function startEditHtmlCard(id) {
+            editingHtmlCardId = id;
+            renderHtmlLibrary();
+            const content = document.getElementById(`html-acc-content-${id}`);
+            const icon = document.getElementById(`html-acc-icon-${id}`);
+            if (content) {
+                content.style.display = 'block';
+                if (icon) icon.innerText = '▲';
+            }
+        }
+
+        function cancelEditHtmlCard() {
+            editingHtmlCardId = '';
+            renderHtmlLibrary();
+        }
+
+        function mirrorLibraryHtmlEdit(id) {
+            const code = document.getElementById(`edit-html-code-${id}`).value;
+            const previewBox = document.getElementById(`html-lib-preview-${id}`);
+            renderSafeHTML(previewBox, code);
+        }
+
+        function saveEditedHtmlCard(id) {
+            const newCode = document.getElementById(`edit-html-code-${id}`).value;
+            let htmls = [];
+            try {
+                htmls = JSON.parse(localStorage.getItem('theater_saved_htmls') || '[]');
+            } catch(e) {}
+
+            const card = htmls.find(h => h.id === id);
+            if (card) {
+                card.html = newCode;
+            }
+
+            localStorage.setItem('theater_saved_htmls', JSON.stringify(htmls));
+            editingHtmlCardId = '';
+            renderHtmlLibrary();
+            showToast('归档卡片已确认修改并同步保存 ✨');
+        }
+
+        function copyLibraryHtmlCode(id) {
+            let htmls = [];
+            try {
+                htmls = JSON.parse(localStorage.getItem('theater_saved_htmls') || '[]');
+            } catch(e) {}
+            const item = htmls.find(h => h.id === id);
+            if (item) {
+                copyTextToClipboard(item.html).then(() => {
+                    showToast('HTML 代码已复制成功！');
+                }).catch(() => {
+                    showToast('复制失败，请手动选择复制');
+                });
+            }
+        }
+
+        function toggleHtmlMultiSelectMode() {
+            isHtmlMultiSelectMode = !isHtmlMultiSelectMode;
+            selectedHtmlsForDelete = [];
+            const toggleBtn = document.getElementById('html-multiselect-toggle-btn');
+            const deleteBtn = document.getElementById('html-library-delete-btn');
+
+            if (isHtmlMultiSelectMode) {
+                toggleBtn.innerText = '取消';
+                deleteBtn.style.display = 'block';
+            } else {
+                toggleBtn.innerText = '多选';
+                deleteBtn.style.display = 'none';
+            }
+            renderHtmlLibrary();
+        }
+
+        function deleteSelectedHtmlCards() {
+            if (selectedHtmlsForDelete.length === 0) {
+                showToast('请先选择要删除的归档卡');
+                return;
+            }
+
+            let htmls = [];
+            try {
+                htmls = JSON.parse(localStorage.getItem('theater_saved_htmls') || '[]');
+            } catch(e) {}
+
+            const updated = htmls.filter(h => !selectedHtmlsForDelete.includes(h.id));
+            localStorage.setItem('theater_saved_htmls', JSON.stringify(updated));
+
+            selectedHtmlsForDelete = [];
+            renderHtmlLibrary();
+            showToast('归档卡片批量删除成功！');
+        }
+
+        // C. API 纯 CSS3 动力生成引擎
+        async function startAPIHtmlGen() {
+            const name = document.getElementById('html-gen-name').value.trim();
+            const content = document.getElementById('html-gen-content').value.trim();
+            const forbidden = document.getElementById('html-gen-forbidden').value.trim();
+
+            if (!name) {
+                showToast('请输入 HTML 名字！');
+                return;
+            }
+            if (!content) {
+                showToast('请先输入您想要的 HTML 交互功能描述！');
+                return;
+            }
+
+            const apiUrl = localStorage.getItem('theater_api_url') || '';
+            const apiKey = localStorage.getItem('theater_api_key') || '';
+            const model = localStorage.getItem('theater_selected_model') || '';
+
+            if (!apiUrl || !apiKey || !model) {
+                showToast('请先在主页面“配置 API”应用中配置连接参数');
+                return;
+            }
+
+            let endpoint = apiUrl;
+            if (!endpoint.endsWith('/chat/completions') && !endpoint.endsWith('/chat/completions/')) {
+                endpoint = endpoint.replace(/\/$/, '') + '/chat/completions';
+            }
+
+            const isStream = document.querySelector('input[name="html-gen-output-mode"]:checked').value === 'stream';
+
+            const spinner = document.getElementById('html-spinner');
+            const btn = document.getElementById('start-api-html-btn');
+
+            spinner.style.display = 'block';
+            btn.setAttribute('disabled', 'true');
+
+            const container = document.getElementById('html-gen-output-container');
+            const displayCode = document.getElementById('html-gen-code-display');
+            const editorCode = document.getElementById('html-gen-code-editor');
+            const previewContent = document.getElementById('html-gen-canvas-preview');
+
+            container.style.display = 'block';
+            displayCode.innerText = '正在生成并测试交互 HTML 代码中...';
+            displayCode.style.display = 'block';
+            editorCode.style.display = 'none';
+            previewContent.innerHTML = '正在载入预览效果...';
+            currentGeneratedHtmlCode = '';
+            isHtmlGenEditMode = false;
+            document.getElementById('html-edit-btn').innerText = '修改';
+            document.getElementById('html-edit-btn').classList.remove('primary');
+
+            // ⚠️ 注入全新硬核约束规则 ：
+            // 1. 包含 <!DOCTYPE html> ... 完整连带输出规范。
+            // 2. 占位变量与文字强制使用双大括号 {{中文变量}}，不进行具体硬编码，提升可读性。
+            const systemPrompt = `你是一个精通纯 HTML 和 CSS 的高级前端卡片交互设计师。你必须严格遵守以下规则：
+1. ⚠️你的输出必须包含完整的 HTML 单文件基本框架结构，必须包含 <!DOCTYPE html>、<html lang="zh-CN">、<head>（含内联的 <style>）和 <body> 标签。
+2. ⚠️绝对禁止生成、输出任何 JavaScript 脚本代码！不能包含任何 <script> 标签、任何内联 JS 事件（例如 onclick、onload、onchange 均严厉禁止）！
+3. ⚠️绝对禁止输出任何具体的硬编码剧情中文文本！页面中所有可变展示文字、描述标签和内容占位，必须统一使用双大括号 {{}} 包裹，并且大括号内部的变量名称必须使用高可读性的中文（例如：{{撕拉提示文字一}}、{{盲盒系列名称}}、{{小票条形码}}、{{账单备注}}等）。
+4. 所有组件交互必须100%通过纯 CSS 原生属性实现（利用 details/summary 标签，复选框与单选框的 :checked 伪类结合兄弟选择器 ~ 或 + 状态机等机制进行互动解锁内容）。
+5. 所有排版风格必须是高级感黑白灰色系或单色，绝对不允许使用任何渐变色（gradient）背景。
+6. 在输出代码时，代码中绝对不能发生中文字符垂直换行排版错误，所有行文标签或字标上必须强制附带 style="white-space: nowrap;"。
+7. 你直接输出纯粹、干净、可以直接渲染的完整 HTML 文本结构，不要在代码外输出任何多余的 Markdown 标记（如 \`\`\`html）或前后缀解释文字。`;
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `组件需求：${content}。${forbidden ? `禁止输出方向：${forbidden}` : ''}` }
+                        ],
+                        temperature: 0.7,
+                        stream: isStream
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`连接请求失败 (HTTP ${response.status})`);
+                }
+
+                if (isStream) {
+                    displayCode.innerText = '';
+                    previewContent.innerHTML = '';
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder('utf-8');
+                    let buffer = '';
+                    let fullText = '';
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); 
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const jsonStr = line.slice(6).trim();
+                                if (jsonStr === '[DONE]') continue;
+                                try {
+                                    const parsed = JSON.parse(jsonStr);
+                                    const chunk = parsed.choices[0].delta.content || '';
+                                    fullText += chunk;
+                                    renderHtmlGenOutput(fullText);
+                                } catch(e) {}
+                            }
+                        }
+                    }
+                } else {
+                    const data = await response.json();
+                    let reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+                    if (!reply) throw new Error('未获取到返回的内容数据');
+                    renderHtmlGenOutput(reply);
+                }
+
+                showToast('HTML 创意交互卡片生成成功 ✨');
+
+            } catch(error) {
+                console.error(error);
+                displayCode.innerText = `生成出错: ${error.message}`;
+                showToast('通信调用异常，请重试');
+            } finally {
+                spinner.style.display = 'none';
+                btn.removeAttribute('disabled');
+            }
+        }
+
+        function renderHtmlGenOutput(rawText) {
+            const displayCode = document.getElementById('html-gen-code-display');
+            const previewContent = document.getElementById('html-gen-canvas-preview');
+
+            let cleanHTML = rawText.trim();
+            if (cleanHTML.includes('```html')) {
+                cleanHTML = cleanHTML.split('```html')[1].split('```')[0].trim();
+            } else if (cleanHTML.includes('```')) {
+                cleanHTML = cleanHTML.split('```')[1].trim();
+            }
+
+            displayCode.innerText = cleanHTML;
+            renderSafeHTML(previewContent, cleanHTML);
+            currentGeneratedHtmlCode = cleanHTML; 
+        }
+
+        function copyHtmlGenCode() {
+            let code = currentGeneratedHtmlCode;
+            if (isHtmlGenEditMode) {
+                code = document.getElementById('html-gen-code-editor').value;
+            }
+            copyTextToClipboard(code).then(() => {
+                showToast('HTML 代码已成功拷贝至系统剪切板');
+            }).catch(() => {
+                showToast('拷贝失败，请手动选择复制');
+            });
+        }
+
+        function saveGeneratedHtmlCard() {
+            const name = document.getElementById('html-gen-name').value.trim();
+            if (!name) {
+                showToast('请先输入 HTML 小剧场创意名称，以便保存！');
+                return;
+            }
+            let codeToSave = currentGeneratedHtmlCode;
+            if (isHtmlGenEditMode) {
+                codeToSave = document.getElementById('html-gen-code-editor').value;
+            }
+
+            if (!codeToSave) {
+                showToast('暂无生成成功的 HTML 代码，无法保存');
+                return;
+            }
+
+            let htmls = [];
+            try {
+                htmls = JSON.parse(localStorage.getItem('theater_saved_htmls') || '[]');
+            } catch(e) {}
+
+            const newCard = {
+                id: 'h_' + Date.now(),
+                name: name,
+                html: codeToSave
+            };
+
+            htmls.push(newCard);
+            localStorage.setItem('theater_saved_htmls', JSON.stringify(htmls));
+            showToast(`HTML 创意组件 [${name}] 已成功保存入库！`);
+            renderHtmlLibrary();
+        }
+
+        // ---------------- 16. 主题与数据 APP 核心算法 (全局壁纸与数据跨端无损备份)  ----------------
+        
+        // A. 全局壁纸上传触发
+        function triggerWallpaperUpload() {
+            document.getElementById('wallpaper-upload-input').click();
+        }
+
+        // 本地壁纸上传、Canvas微缩高清缓冲
+        function handleWallpaperUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const max_size = 1080; // 高清自适应宽
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > max_size) {
+                                height *= max_size / width;
+                                width = max_size;
+                            }
+                        } else {
+                            if (height > max_size) {
+                                width *= max_size / height;
+                                height = max_size;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // 转换成优化 JPEG base64，防止超出 localStorage 限额 
+                        const base64 = canvas.toDataURL('image/jpeg', 0.75);
+                        
+                        localStorage.setItem('theater_global_wallpaper', base64);
+                        applyWallpaper(base64);
+                        showToast('壁纸上传成功，已全局完美应用 ✨');
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 应用壁纸底图渲染
+        function applyWallpaper(base64) {
+            const el = document.getElementById('global-wallpaper');
+            if (base64) {
+                el.style.backgroundImage = `url(${base64})`;
+                el.style.opacity = '1';
+                updateWallpaperFilters();
+            } else {
+                el.style.backgroundImage = 'none';
+                el.style.opacity = '0';
+            }
+        }
+
+        // 智慧型多级滤镜渲染引擎（含无级毛玻璃模糊度 + iOS/微信级夜间模式调光折射） 
+        function updateWallpaperFilters() {
+            const el = document.getElementById('global-wallpaper');
+            const blurVal = document.getElementById('wallpaper-blur-slider').value;
+            const blurLabel = document.getElementById('blur-val-text');
+            blurLabel.innerText = `${blurVal}%`;
+
+            // 比例运算，100% 对应最大 30px 毛玻璃物理模糊
+            const pixelBlur = (blurVal / 100) * 30;
+            // 模式判定，暗黑模式下自动叠加上一层暗黑滤镜 
+            const isDark = document.documentElement.classList.contains('dark-mode');
+            const brightness = isDark ? 0.55 : 1.0;
+
+            el.style.filter = `blur(${pixelBlur}px) brightness(${brightness})`;
+            localStorage.setItem('theater_wallpaper_blur', blurVal);
+        }
+
+        // 清除背景重置
+        function clearGlobalWallpaper() {
+            localStorage.removeItem('theater_global_wallpaper');
+            localStorage.removeItem('theater_wallpaper_blur');
+            document.getElementById('wallpaper-blur-slider').value = 0;
+            document.getElementById('blur-val-text').innerText = '0%';
+            applyWallpaper(null);
+            showToast('背景已完全重置还原。');
+        }
+
+        // B. 极具安全性、跨浏览器、WebView与APK的数据多端备份算法 
+        
+        // 获取带实时时间格式的备份名称 
+        function getExportFileName() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const date = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            return `耳机の小剧场游玩区_备份数据_${year}${month}${date}_${hours}${minutes}.json`;
+        }
+
+        // 导出
+        function exportAllData() {
+            const backup = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                backup[key] = localStorage.getItem(key);
+            }
+
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = getExportFileName();
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('所有数据已成功备份并下载！✅');
+        }
+
+        // 导入触发
+        function triggerDataImport() {
+            document.getElementById('data-import-input').click();
+        }
+
+        // 恢复数据并重载 
+        function handleDataImport(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (Object.keys(data).length === 0) {
+                            showToast('备份文件为空或无效，导入失败！');
+                            return;
+                        }
+
+                        // 清理现有存储，准备无缝载入
+                        localStorage.clear();
+
+                        for (const key in data) {
+                            localStorage.setItem(key, data[key]);
+                        }
+
+                        showToast('所有数据已恢复恢复成功！正在重新载入系统...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1200);
+
+                    } catch(err) {
+                        console.error(err);
+                        showToast('数据读取失败！请保证导入正确的 JSON 备份文档。');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // ---------------- 16. 安全初始化自愈防崩溃 ----------------
+        document.addEventListener('DOMContentLoaded', () => {
+            document.documentElement.classList.remove('dark-mode');
+           // 现场自愈自检：后台进程休眠或刷新后，恢复原本打开的页面，避免自动退回主页
+            try {
+                const savedViewId = localStorage.getItem('theater_active_view_id');
+                if (savedViewId && savedViewId !== 'home-view') {
+                    document.querySelectorAll('.view').forEach(view => {
+                        view.classList.remove('active');
+                    });
+                    const targetView = document.getElementById(savedViewId);
+                    if (targetView) {
+                        targetView.classList.add('active');
+                    }
+                }
+            } catch(e) { console.error("主视图自愈恢复失败", e); }
+
+            // 自愈型时序时钟守护
+            try {
+                setInterval(updateStatusTime, 1000);
+                updateStatusTime();
+            } catch(e) { console.error("时钟自愈", e); }
+            
+            try {
+                window.addEventListener('online', updateNetworkStatus);
+                window.addEventListener('offline', updateNetworkStatus);
+                updateNetworkStatus();
+            } catch(e) { console.error("信号自愈", e); }
+            
+            try {
+                initBatteryStatus();
+            } catch(e) { console.error("电量自愈", e); }
+
+            // 恢复外部大模型参数配置
+            try {
+                const savedUrl = localStorage.getItem('theater_api_url') || "";
+                const savedKey = localStorage.getItem('theater_api_key') || "";
+                document.getElementById('api-url').value = savedUrl;
+                document.getElementById('api-key').value = savedKey;
+
+                const savedModelsJson = localStorage.getItem('theater_model_list');
+                const savedSelectedModel = localStorage.getItem('theater_selected_model');
+
+                if (savedModelsJson) {
+                    localModels = JSON.parse(savedModelsJson);
+                    selectedModelId = savedSelectedModel || "";
+                    renderModelList(localModels);
+                }
+            } catch(e) { console.error("模型缓存自愈", e); }
+
+            // 暂存剧本与破限还原
+            try {
+                const tempVal = localStorage.getItem('theater_temp_input');
+                if (tempVal) {
+                    document.getElementById('play-input').value = tempVal;
+                }
+
+                const breakEnabled = localStorage.getItem('theater_break_enabled') === 'true';
+                document.getElementById('break-enabled').checked = breakEnabled;
+                document.getElementById('break-words').value = localStorage.getItem('theater_break_words') || '';
+            } catch(e) { console.error("剧本缓存自愈", e); }
+
+            // 人设卡绑定自愈还原 
+            try {
+                const charCardVal = localStorage.getItem('bound_char_card');
+                if (charCardVal && charCardVal !== 'undefined') {
+                    const charCard = JSON.parse(charCardVal);
+                    if (charCard) {
+                        boundCharCard = charCard;
+                        document.getElementById('bind-char-text').innerText = charCard.name;
+                        const avatar = document.getElementById('bind-char-avatar');
+                        if (charCard.avatar) {
+                            avatar.src = charCard.avatar;
+                            avatar.style.display = 'inline-block';
+                        }
+                    }
+                }
+
+                const userCardVal = localStorage.getItem('bound_user_card');
+                if (userCardVal && userCardVal !== 'undefined') {
+                    const userCard = JSON.parse(userCardVal);
+                    if (userCard) {
+                        boundUserCard = userCard;
+                        document.getElementById('bind-user-text').innerText = userCard.name;
+                        const avatar = document.getElementById('bind-user-avatar');
+                        if (userCard.avatar) {
+                            avatar.src = userCard.avatar;
+                            avatar.style.display = 'inline-block';
+                        }
+                    }
+                }
+            } catch(e) { console.error("人设绑定自愈", e); }
+
+            // 主题壁纸初始化渲染自愈还原 
+            try {
+                const savedWallpaper = localStorage.getItem('theater_global_wallpaper');
+                if (savedWallpaper) {
+                    const savedBlur = localStorage.getItem('theater_wallpaper_blur') || 0;
+                    document.getElementById('wallpaper-blur-slider').value = savedBlur;
+                    document.getElementById('blur-val-text').innerText = `${savedBlur}%`;
+                    applyWallpaper(savedWallpaper);
+                }
+            } catch(e) { console.error("壁纸还原自愈", e); }
+
+            // 初始化所有库的静观同步，绝不丢失 
+            try {
+                renderSavedTheaters();
+                renderGeneratorPrompts();
+                renderSavedSessions();
+                renderHtmlLibrary(); 
+            } catch(e) { console.error("库同步自愈", e); }
+        });
+    </script>
+</body>
+</html>
